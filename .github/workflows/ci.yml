@@ -19,11 +19,14 @@ env:
   DERIVED_DATA: /tmp/TiebaPureDerivedData
 
 jobs:
-  # Keep one stable check name for branch protection. This follows the common
-  # open-source client pattern: tests, a small UI smoke set, and a release build.
-  ci-ok:
+  # Unit tests run independently from UI / release work so each lane can run
+  # on its own runner in parallel. DerivedData is cached across runs (and
+  # reused between lanes via a prefix restore key) so unchanged modules are
+  # not recompiled from scratch on every run.
+  unit-tests:
+    name: Unit tests + iOS 16 linkage
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -38,13 +41,22 @@ jobs:
           test -n "$udid"
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
 
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: tieba-deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'TiebaPure.xcodeproj/**', 'TiebaPure/**', 'TiebaPureTests/**', 'TiebaPureUITests/**', 'TiebaPureOpenIn/**') }}
+          restore-keys: |
+            tieba-deriveddata-${{ runner.os }}-
+
       - name: Unit tests
         run: |
           xcodebuild -project TiebaPure.xcodeproj -scheme TiebaPure \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
-            -parallel-testing-enabled NO \
+            -parallel-testing-enabled YES \
+            -quiet \
             test -only-testing:TiebaPureTests \
             -skip-testing:TiebaPureTests/AnonymousLiveSmokeTests
 
@@ -62,12 +74,27 @@ jobs:
             test "$load_commands" = LC_LOAD_WEAK_DYLIB
           done
 
-      - name: Reset simulator for UI smoke tests
+  ui-tests-iphone:
+    name: UI smoke tests (iPhone)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Boot iPhone simulator
         run: |
           source scripts/ci-simulator.sh
-          udid="$(ci_reset_simulator "$SIMULATOR_UDID" "$(ci_iphone_device_type)" 'TiebaPure CI UI')"
+          udid="$(ci_create_simulator "$(ci_iphone_device_type)" 'TiebaPure CI UI')"
           test -n "$udid"
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: tieba-deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'TiebaPure.xcodeproj/**', 'TiebaPure/**', 'TiebaPureTests/**', 'TiebaPureUITests/**', 'TiebaPureOpenIn/**') }}
+          restore-keys: |
+            tieba-deriveddata-${{ runner.os }}-
 
       - name: Fixture UI smoke tests
         run: |
@@ -76,6 +103,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             -parallel-testing-enabled NO \
+            -quiet \
             test \
             -only-testing:TiebaPureUITests/TiebaPureUITests/testLaunchShowsHomeWithoutLoginAndRootTabs \
             -only-testing:TiebaPureUITests/TiebaPureUITests/testHomeTabReselectWithNormalAnimations \
@@ -90,15 +118,29 @@ jobs:
             -only-testing:TiebaPureUITests/TiebaPureUITests/testFullScreenImageOffersDownloadAndTapReturnsToSource \
             -only-testing:TiebaPureUITests/TiebaPureUITests/testLoggedInUserCanAcknowledgeComposeRiskSaveDraftAndPublishThread \
             -only-testing:TiebaPureUITests/TiebaPureUITests/testLoggedInUserCanReplyToFloorAndReturnsToUpdatedSubpostList \
-            -retry-tests-on-failure -test-iterations 2 \
-            -test-repetition-relaunch-enabled YES
+            -retry-tests-on-failure
 
-      - name: Reset simulator for iPad layout test
+  ui-tests-ipad:
+    name: UI smoke test (iPad)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Boot iPad simulator
         run: |
           source scripts/ci-simulator.sh
-          udid="$(ci_reset_simulator "$SIMULATOR_UDID" "$(ci_ipad_device_type)" 'TiebaPure CI iPad')"
+          udid="$(ci_create_simulator "$(ci_ipad_device_type)" 'TiebaPure CI iPad')"
           test -n "$udid"
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: tieba-deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'TiebaPure.xcodeproj/**', 'TiebaPure/**', 'TiebaPureTests/**', 'TiebaPureUITests/**', 'TiebaPureOpenIn/**') }}
+          restore-keys: |
+            tieba-deriveddata-${{ runner.os }}-
 
       - name: iPad split layout smoke test
         run: |
@@ -107,18 +149,42 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             -parallel-testing-enabled NO \
+            -quiet \
             test \
             -only-testing:TiebaPureUITests/TiebaPureUITests/testIPadLandscapeReaderListUsesAvailableWidth \
-            -retry-tests-on-failure -test-iterations 2 \
-            -test-repetition-relaunch-enabled YES
+            -retry-tests-on-failure
 
-      - name: Release build and bundled notices
+  # Release build and the unsigned IPA only run on events that actually
+  # produce an artifact (tag / release / manual dispatch). Plain pushes to
+  # main just run the test lanes above, which keeps the common path fast.
+  release-artifact:
+    name: Release build + unsigned IPA
+    if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: [unit-tests, ui-tests-iphone, ui-tests-ipad]
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: tieba-deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'TiebaPure.xcodeproj/**', 'TiebaPure/**', 'TiebaPureTests/**', 'TiebaPureUITests/**', 'TiebaPureOpenIn/**') }}
+          restore-keys: |
+            tieba-deriveddata-${{ runner.os }}-
+
+      - name: Release build
         run: |
           xcodebuild -project TiebaPure.xcodeproj -scheme TiebaPure \
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath "$DERIVED_DATA" \
+            -quiet \
             build CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify build objects (MinOS, linkage, notices)
+        run: |
           APP="$DERIVED_DATA/Build/Products/Release-iphoneos/TiebaPure.app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = 16.4
           test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/PlugIns/TiebaPureOpenIn.appex/Info.plist")" = 16.4
@@ -133,14 +199,12 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP/Info.plist")" = true
 
       - name: Install xcodegen if absent
-        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         run: |
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
 
       - name: Package unsigned IPA
-        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         id: package-ipa
         run: |
           ./scripts/package-unsigned-ipa.sh
@@ -149,7 +213,6 @@ jobs:
           echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
 
       - name: Publish unsigned IPA release
-        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -173,3 +236,12 @@ jobs:
             gh release create "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" --notes "$NOTES"
           fi
+
+  # Keep one stable check name (branch protection compatibility) that only
+  # depends on the always-on test lanes.
+  ci-ok:
+    name: ci-ok
+    needs: [unit-tests, ui-tests-iphone, ui-tests-ipad]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All required checks passed."
