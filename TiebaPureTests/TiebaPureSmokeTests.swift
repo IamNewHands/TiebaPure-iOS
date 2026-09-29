@@ -1,6 +1,7 @@
 import Security
 import SwiftUI
 import ImageIO
+import UIKit
 import XCTest
 @testable import TiebaPure
 
@@ -188,9 +189,22 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
     }
 
-    func testInlineContentTextOnlyMeasuresGlyphOutlinesForCombiningMarks() {
-        XCTAssertFalse(InlineContentTextLayout.requiresGlyphOutlineMeasurement("普通中文回复"))
-        XCTAssertTrue(InlineContentTextLayout.requiresGlyphOutlineMeasurement("a\u{0301}"))
+    func testTextContainerInsetsAlwaysCoverFirstLineGlyphInk() {
+        // Top inset is computed from measured glyph ink for every run, not
+        // only when combining marks are present, so plain tall text cannot be
+        // clipped at the heading either.
+        let scale = CGFloat(3)
+        let insets = InlineContentTextLayout.textContainerInsets(
+            for: NSAttributedString(string: "普通中文回复", attributes: [
+                .font: UIFont.preferredFont(forTextStyle: .callout)
+            ]),
+            displayScale: scale
+        )
+        let guardHeight = 1 + 2 / scale
+        XCTAssertEqual(insets.top, guardHeight, accuracy: 0.01)
+        XCTAssertEqual(insets.bottom, guardHeight, accuracy: 0.01)
+        XCTAssertEqual(insets.left, 0)
+        XCTAssertEqual(insets.right, 0)
     }
 
     func testThreadPaginationContinuesAfterServerLocatedPostPage() {

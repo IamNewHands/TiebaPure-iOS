@@ -1562,16 +1562,14 @@ enum InlineContentTextLayout {
         let fractionalBaselineGuard: CGFloat = 1
         let physicalPixel = 1 / scale
         let rasterizationGuard = fractionalBaselineGuard + physicalPixel * 2
-        let baselineInsets = UIEdgeInsets(
-            top: rasterizationGuard,
-            left: 0,
-            bottom: rasterizationGuard,
-            right: 0
-        )
-        guard requiresGlyphOutlineMeasurement(attributedText.string) else {
-            return baselineInsets
-        }
 
+        // Always measure the real glyph ink on the first line. Do not gate
+        // this behind "contains combining marks": a fallback font or a tall
+        // script can poke above (or below) the typographic ascent even with no
+        // non-base character, and a too-small top inset clips the heading of
+        // the first line. The `.oversize` sizing rule only widens the measured
+        // height; it does not move the first line down, whose draw offset is
+        // governed by this inset.
         let line = CTLineCreateWithAttributedString(attributedText)
         var ascent: CGFloat = 0
         var descent: CGFloat = 0
@@ -1601,12 +1599,6 @@ enum InlineContentTextLayout {
             && abs(lhs.left - rhs.left) < 0.01
             && abs(lhs.bottom - rhs.bottom) < 0.01
             && abs(lhs.right - rhs.right) < 0.01
-    }
-
-    static func requiresGlyphOutlineMeasurement(_ text: String) -> Bool {
-        text.unicodeScalars.contains {
-            CharacterSet.nonBaseCharacters.contains($0)
-        }
     }
 
     static func measuredHeight(
