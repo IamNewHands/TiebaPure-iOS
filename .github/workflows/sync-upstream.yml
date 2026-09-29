@@ -51,8 +51,15 @@ jobs:
           fi
 
       - name: Mirror new upstream release tag
+        env:
+          # gh CLI refuses to run in Actions without an explicit token.
+          GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="$(gh api "repos/${UPSTREAM}/releases/latest" --jq .tag_name)"
+          TAG="$(gh api "repos/${UPSTREAM}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "Upstream has no published release yet; nothing to mirror"
+            exit 0
+          fi
           echo "Latest upstream release tag: $TAG"
           if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}"; then
             echo "Tag ${TAG} already exists here; nothing to do"
