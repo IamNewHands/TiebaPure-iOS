@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -130,3 +130,44 @@ jobs:
           test -f "$APP/SwiftProtobuf-Apache-2.0.txt"
           grep -Fq 'Apache License' "$APP/SwiftProtobuf-Apache-2.0.txt"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP/Info.plist")" = true
+
+      - name: Install xcodegen if absent
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Package unsigned IPA
+        id: package-ipa
+        run: |
+          ./scripts/package-unsigned-ipa.sh
+          IPA="$GITHUB_WORKSPACE/build/TiebaPure-unsigned.ipa"
+          test -f "$IPA"
+          echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+
+      - name: Publish unsigned IPA release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE_TAG="nightly"
+          IPA="${IPA_PATH}"
+          test -f "$IPA"
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          TITLE="TiebaPure unsigned IPA (nightly · run #${GITHUB_RUN_NUMBER})"
+          NOTES="Unofficial unsigned build of \`${RELEASE_TAG}\`.
+
+- Release: \`${RELEASE_TAG}\`
+- Built at: \`${TIMESTAMP}\`
+- Run: [\#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+- Commit: \`${SHORT_SHA}\`
+
+> Asset is unsigned; sign it before installing on a real device."
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" --notes "$NOTES"
+          fi
