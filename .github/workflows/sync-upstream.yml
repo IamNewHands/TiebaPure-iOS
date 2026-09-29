@@ -33,7 +33,6 @@ jobs:
       - name: Add upstream remote and fetch
         run: |
           git remote add upstream "https://github.com/${UPSTREAM}.git"
-          git fetch --tags upstream
           git fetch upstream main:refs/remotes/upstream/main
 
       - name: Merge upstream main into main
@@ -59,7 +58,9 @@ jobs:
             echo "Tag ${TAG} already exists here; nothing to do"
             exit 0
           fi
-          # The tag was imported by `git fetch --tags upstream`; publish it here so the
-          # iOS CI `push: tags: ['v*']` trigger builds and releases the unsigned IPA.
-          git push origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          # Tag OUR synced HEAD (which carries our ci.yml packaging steps) rather than
+          # the raw upstream object, so the iOS CI `push: tags: ['v*']` trigger runs our
+          # workflow and produces the unsigned IPA from the synced source.
+          git tag "${TAG}" HEAD
+          git push origin "${TAG}"
           echo "Mirrored upstream release tag ${TAG}"
