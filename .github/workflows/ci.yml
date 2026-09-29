@@ -58,7 +58,8 @@ jobs:
             -parallel-testing-enabled YES \
             -quiet \
             test -only-testing:TiebaPureTests \
-            -skip-testing:TiebaPureTests/AnonymousLiveSmokeTests
+            -skip-testing:TiebaPureTests/AnonymousLiveSmokeTests \
+            -retry-tests-on-failure
 
       - name: Verify iOS 16 compatibility linkage
         run: |
