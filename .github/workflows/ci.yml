@@ -3,6 +3,7 @@ name: iOS CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -132,12 +133,14 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP/Info.plist")" = true
 
       - name: Install xcodegen if absent
+        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         run: |
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
 
       - name: Package unsigned IPA
+        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         id: package-ipa
         run: |
           ./scripts/package-unsigned-ipa.sh
@@ -146,18 +149,23 @@ jobs:
           echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
 
       - name: Publish unsigned IPA release
+        if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RELEASE_TAG="nightly"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          else
+            RELEASE_TAG="nightly"
+          fi
           IPA="${IPA_PATH}"
           test -f "$IPA"
           TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           SHORT_SHA="${GITHUB_SHA:0:7}"
-          TITLE="TiebaPure unsigned IPA (nightly run #${GITHUB_RUN_NUMBER})"
+          TITLE="TiebaPure IPA ${RELEASE_TAG} (run #${GITHUB_RUN_NUMBER})"
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          NOTES=$(printf 'Unofficial unsigned build of `nightly`.\n\n- Built at: %s\n- Run: [run #%s](%s)\n- Commit: `%s`\n\n> Asset is unsigned; sign it before installing on a real device.\n' "$TIMESTAMP" "$GITHUB_RUN_NUMBER" "$RUN_URL" "$SHORT_SHA")
+          NOTES=$(printf 'Unofficial unsigned build of `%s`.\n\n- Built at: %s\n- Run: [run #%s](%s)\n- Commit: `%s`\n\n> Asset is unsigned; sign it before installing on a real device.\n' "$RELEASE_TAG" "$TIMESTAMP" "$GITHUB_RUN_NUMBER" "$RUN_URL" "$SHORT_SHA")
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES"
