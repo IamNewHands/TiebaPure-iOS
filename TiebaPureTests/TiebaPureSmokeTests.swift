@@ -189,10 +189,10 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
     }
 
-    func testTextContainerInsetsAlwaysCoverFirstLineGlyphInk() {
-        // Top inset is computed from measured glyph ink for every run, not
-        // only when combining marks are present, so plain tall text cannot be
-        // clipped at the heading either.
+    func testTextContainerInsetsGuaranteeFirstNameHeadroom() {
+        // Top inset always keeps a flat point floor for the first line's ink,
+        // on top of the scale-aware raster guard, so the heading cannot be
+        // clipped even when CoreText reports no measurable ascent overflow.
         let scale = CGFloat(3)
         let insets = InlineContentTextLayout.textContainerInsets(
             for: NSAttributedString(string: "普通中文回复", attributes: [
@@ -200,9 +200,9 @@ final class TiebaPureSmokeTests: XCTestCase {
             ]),
             displayScale: scale
         )
-        let guardHeight = 1 + 2 / scale
-        XCTAssertEqual(insets.top, guardHeight, accuracy: 0.01)
-        XCTAssertEqual(insets.bottom, guardHeight, accuracy: 0.01)
+        let bottomGuard = 1 + 2 / scale
+        XCTAssertEqual(insets.top, 3 + bottomGuard, accuracy: 0.02)
+        XCTAssertEqual(insets.bottom, bottomGuard, accuracy: 0.02)
         XCTAssertEqual(insets.left, 0)
         XCTAssertEqual(insets.right, 0)
     }
