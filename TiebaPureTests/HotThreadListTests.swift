@@ -27,7 +27,7 @@ final class HotThreadListTests: XCTestCase {
         "1241"
         + "122c"
         + "08a946"
-        + "1a12e7babfe5bda2e6ada3e783ade782b9e5b896"
+        + "1a12e7babfe6a0bce5bc8fe783ade782b9e5b896"
         + "2007"
         + "d801ab04"
         + "e20109e783ade782b9e590a7"
