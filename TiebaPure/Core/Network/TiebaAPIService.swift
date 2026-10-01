@@ -50,6 +50,7 @@ protocol TiebaAPIService {
     func forumMembership(account: Account, forum: Forum) async throws -> ForumMembership
     func setForumFollowed(account: Account, forum: Forum, followed: Bool) async throws -> ForumMembership
     func signForum(account: Account, forum: Forum) async throws -> ForumSignResult
+    func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus]
     func accountThreadFavorites(account: Account, page: Int) async throws -> AccountThreadFavoritesPage
     func setAccountThreadFavorite(
         account: Account,
@@ -76,6 +77,12 @@ extension TiebaAPIService {
     /// implement check-in (test doubles, offline stubs) reject it rather than
     /// having to carry a stub.
     func signForum(account: Account, forum: Forum) async throws -> ForumSignResult {
+        throw UserProfileMutationError.unsupportedByService
+    }
+
+    /// Level and check-in state per followed forum is optional: services without
+    /// the guide listing reject it rather than reporting a wrong level.
+    func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus] {
         throw UserProfileMutationError.unsupportedByService
     }
 
