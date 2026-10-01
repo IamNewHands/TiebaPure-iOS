@@ -215,6 +215,12 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         }
     }
 
+    func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus] {
+        try await monitored(account: account) {
+            try await base.followedForumStatuses(account: account)
+        }
+    }
+
     func accountThreadFavorites(
         account: Account,
         page: Int

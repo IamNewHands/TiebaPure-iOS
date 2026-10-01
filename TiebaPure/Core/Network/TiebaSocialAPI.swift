@@ -64,6 +64,24 @@ enum TiebaSocialRequestFactory {
         ]
     }
 
+    static func followedForumGuideFields(
+        tbs: String,
+        page: Int,
+        pageSize: Int = FollowedForumGuidePolicy.pageSize
+    ) throws -> [String: String] {
+        let resolvedTBS = tbs.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard resolvedTBS.isEmpty == false else { throw TiebaMutationError.missingTBS }
+        // Credentials travel as cookies on this web endpoint, so the factory
+        // deliberately carries neither BDUSS nor stoken as form fields.
+        return [
+            "tbs": resolvedTBS,
+            "sort_type": "3",
+            "call_from": "3",
+            "page_no": "\(max(page, 1))",
+            "res_num": "\(max(pageSize, 1))"
+        ]
+    }
+
     static func likeFields(
         account: Account,
         tbs: String,
@@ -329,7 +347,129 @@ struct ForumMembershipResponseDTO: Decodable {
     }
 }
 
+struct FollowedForumGuideResponseDTO: Decodable {
+    struct ForumDTO: Decodable {
+        var forumID: Int64
+        var level: Int
+        var isSignedToday: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case forumID = "forum_id"
+            case level = "level_id"
+            case isSignedToday = "is_sign"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            forumID = container.flexibleInt64(forKey: .forumID)
+            level = container.flexibleInt(forKey: .level)
+            isSignedToday = container.flexibleBool(forKey: .isSignedToday)
+        }
+    }
+
+    struct DataDTO: Decodable {
+        var forums: [ForumDTO]
+        var hasMore: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case forums = "like_forum"
+            case hasMore = "like_forum_has_more"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            forums = try container.decodeIfPresent([ForumDTO].self, forKey: .forums) ?? []
+            hasMore = container.flexibleBool(forKey: .hasMore)
+        }
+    }
+
+    var errorCode: Int
+    var errorMessage: String
+    var data: DataDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case errorCode = "error_code"
+        case errorMessage = "error_msg"
+        case data
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        errorCode = container.flexibleInt(forKey: .errorCode)
+        errorMessage = container.decodeStringIfPresent(forKey: .errorMessage) ?? ""
+        data = try container.decodeIfPresent(DataDTO.self, forKey: .data)
+    }
+}
+
+/// Bounds the followed-forum guide pagination. A page of 200 is the largest the
+/// endpoint serves, so five pages cover 1000 followed forums — far past any real
+/// account — while a malformed `like_forum_has_more` cannot loop forever.
+enum FollowedForumGuidePolicy {
+    static let pageSize = 200
+    static let maximumPages = 5
+}
+
 extension TiebaAPI {
+    /// One followed-forum listing with the account's level and today's check-in
+    /// state per forum.
+    ///
+    /// The level-info endpoint needs one request per forum and never reports
+    /// whether the check-in is already done, so the hub reads both values from
+    /// this guide listing instead.
+    func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus] {
+        var statuses: [FollowedForumStatus] = []
+        var page = 1
+
+        while page <= FollowedForumGuidePolicy.maximumPages {
+            let response = try await followedForumGuidePage(account: account, page: page)
+            try TiebaResponseValidator.validate(code: response.errorCode, message: response.errorMessage)
+            guard let data = response.data else { throw TiebaAPIError.emptyResponse }
+
+            statuses.append(contentsOf: data.forums.compactMap { forum in
+                guard forum.forumID > 0 else { return nil }
+                return FollowedForumStatus(
+                    forumID: forum.forumID,
+                    level: max(forum.level, 0),
+                    isSignedToday: forum.isSignedToday
+                )
+            })
+
+            // An empty page with a sticky "has more" flag would otherwise spin.
+            guard data.hasMore, data.forums.isEmpty == false else { break }
+            page += 1
+        }
+
+        return statuses
+    }
+
+    private func followedForumGuidePage(
+        account: Account,
+        page: Int
+    ) async throws -> FollowedForumGuideResponseDTO {
+        let tbs = try await resolvedClientTBS(for: account)
+        let fields = try TiebaSocialRequestFactory.followedForumGuideFields(
+            tbs: tbs,
+            page: page
+        )
+        return try await client.postForm(
+            .followedForumGuide,
+            fields: fields,
+            headers: [
+                "Cookie": account.minimalCookieHeader,
+                "Subapp-Type": "hybrid"
+            ],
+            as: FollowedForumGuideResponseDTO.self
+        )
+    }
+
+    /// Reading the guide needs a valid TBS, but a login normally stores one:
+    /// refresh only when the stored value is missing.
+    private func resolvedClientTBS(for account: Account) async throws -> String {
+        let stored = account.tbs.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard stored.isEmpty else { return stored }
+        return try await refreshedClientTBS(for: account)
+    }
+
     func refreshedClientTBS(for account: Account) async throws -> String {
         try await refreshedClientTBS(for: account, allowsStoredFallback: true)
     }
@@ -635,5 +775,14 @@ private extension KeyedDecodingContainer {
         if let value = try? decode(Int.self, forKey: key) { return Int64(value) }
         if let value = try? decode(String.self, forKey: key) { return Int64(value) ?? 0 }
         return 0
+    }
+
+    func flexibleBool(forKey key: Key) -> Bool {
+        if let value = try? decode(Bool.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return value != 0 }
+        if let value = try? decode(String.self, forKey: key) {
+            return value == "1" || value.lowercased() == "true"
+        }
+        return false
     }
 }

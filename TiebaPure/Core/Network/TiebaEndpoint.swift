@@ -11,6 +11,7 @@ enum TiebaEndpoint {
     case initNickname
     case webMyInfo
     case followedForums
+    case followedForumGuide
     case forumPageForm
     case personalized
     case frsPage
@@ -53,6 +54,10 @@ enum TiebaEndpoint {
             return Self.base.appending(path: "/mo/q/newmoindex")
         case .followedForums:
             return Self.appBase.appending(path: "/c/f/forum/getforumlist")
+        case .followedForumGuide:
+            // The web "hybrid" guide endpoint: the only followed-forum call
+            // that also reports the account's per-forum level and check-in.
+            return Self.base.appending(path: "/c/f/forum/forumGuide")
         case .forumPageForm:
             return Self.appBase.appending(path: "/c/f/frs/page")
         case .personalized:
