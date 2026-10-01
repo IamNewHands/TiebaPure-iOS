@@ -1832,7 +1832,16 @@ final class TiebaPureUITests: XCTestCase {
             guard let frame = waitForStableFrame(of: firstRow) else {
                 return XCTFail("刷新后的首行位置未稳定")
             }
-            XCTAssertEqual(frame.minY, app.navigationBars["首页"].frame.maxY, accuracy: 24)
+            // The feed now starts under the 推荐/热点 分页控件, not directly
+            // under the navigation bar.
+            let feedHeader = app.descendants(matching: .any)["home-feed-segment-picker"]
+            if feedHeader.exists {
+                XCTAssertEqual(frame.minY, feedHeader.frame.maxY, accuracy: 24)
+            } else {
+                let segmented = app.segmentedControls.firstMatch
+                XCTAssertTrue(segmented.waitForExistence(timeout: 5), "首页应有推荐/热点分页控件")
+                XCTAssertEqual(frame.minY, segmented.frame.maxY, accuracy: 24)
+            }
         }
     }
 

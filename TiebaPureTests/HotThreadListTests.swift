@@ -10,12 +10,12 @@ final class HotThreadListTests: XCTestCase {
     /// forumId 555, forumName, authorId 77} and one hot_thread_tab_info(3)
     /// {tab_name 3 = 综合, tab_code 8 = hot_all}.
     private static let hotThreadWireHex =
-        "1240"
-        + "122b"
+        "1241"
+        + "122c"
         + "08a946"
         + "1a12e7babfe5bda2e6ada3e783ade782b9e5b896"
         + "2007"
-        + "d8012b"
+        + "d801ab04"
         + "e20109e783ade782b9e590a7"
         + "c0034d"
         + "1a11"
@@ -169,12 +169,12 @@ final class HotThreadListTests: XCTestCase {
 
         let thread = ThreadMapper.fromThreadInfo(threadInfo, usersByID: [:])
 
-        XCTAssertEqual(thread.id, 9001)
-        XCTAssertEqual(thread.title, "线格式热点帖")
-        XCTAssertEqual(thread.replyCount, 7)
-        XCTAssertEqual(thread.forumID, 555)
-        XCTAssertEqual(thread.forumName, "热点吧")
-        XCTAssertEqual(thread.author.id, 77)
+        XCTAssertEqual(thread.id, 9001, "id(1) 必须解出")
+        XCTAssertEqual(thread.title, "线格式热点帖", "title(3) 必须解出")
+        XCTAssertEqual(thread.replyCount, 7, "replyNum(4) 必须解出")
+        XCTAssertEqual(thread.forumID, 555, "forumId(27) 必须解出")
+        XCTAssertEqual(thread.forumName, "热点吧", "forumName(28) 必须解出")
+        XCTAssertEqual(thread.author.id, 77, "authorId(56) 必须落成作者 id")
     }
 
     func testTabsWithoutCodeOrNameAreDropped() {
