@@ -2,6 +2,20 @@ import SwiftProtobuf
 import XCTest
 @testable import TiebaPure
 
+/// One assertion per test on purpose. The CI runner keeps the failing test's
+/// NAME but drops the assertion body (the `.xcresult` is never uploaded), so a
+/// per-field failure is only identifiable from the test that carries it.
+private func assertField<T: Equatable>(
+    _ actual: T,
+    _ expected: T,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    if actual != expected {
+        XCTFail("field mismatch", file: file, line: line)
+    }
+}
+
 final class HotThreadListTests: XCTestCase {
     /// Hand-encoded wire bytes, deliberately not produced by SwiftProtobuf, so
     /// field-number or wire-type drift in the generated schema fails the decode
@@ -101,6 +115,16 @@ final class HotThreadListTests: XCTestCase {
         )
     }
 
+    private func decodedWireThreadInfo() throws -> Tieba_ThreadInfo {
+        let wireData = try XCTUnwrap(Self.data(hex: Self.hotThreadWireHex))
+        let decoded = try Tieba_HotThreadList_HotThreadListResponse(serializedBytes: wireData)
+        return try XCTUnwrap(decoded.data.threadInfo.first)
+    }
+
+    private func mappedWireThread() throws -> ThreadSummary {
+        ThreadMapper.fromThreadInfo(try decodedWireThreadInfo(), usersByID: [:])
+    }
+
     func testHotThreadListEndpointTargetsTheCommandProtobufPath() {
         let url = TiebaEndpoint.hotThreadList.url
 
@@ -162,60 +186,54 @@ final class HotThreadListTests: XCTestCase {
         XCTAssertEqual(tabs, [HotTab(code: "hot_all", name: "综合")])
     }
 
-    func testHandCraftedWireThreadMapsThroughTheThreadMapper() throws {
-        let wireData = try XCTUnwrap(Self.data(hex: Self.hotThreadWireHex))
-        let decoded = try Tieba_HotThreadList_HotThreadListResponse(serializedBytes: wireData)
-        let threadInfo = try XCTUnwrap(decoded.data.threadInfo.first)
-        let thread = ThreadMapper.fromThreadInfo(threadInfo, usersByID: [:])
+    // MARK: - Hand-crafted wire bytes, one assertion per test
 
-        // The runner keeps stdout but not the .xcresult, so the values are
-        // printed as well as asserted: a failing run then shows what the wire
-        // bytes actually produced instead of only the failing test's name.
-        print("HOTWIRE decoded id=\(threadInfo.id) title=\(threadInfo.title) replyNum=\(threadInfo.replyNum) forumId=\(threadInfo.forumID) forumName=\(threadInfo.forumName) authorId=\(threadInfo.authorID)")
-        print("HOTMAP id=\(thread.id) title=\(thread.title) replyCount=\(thread.replyCount) forumID=\(String(describing: thread.forumID)) forumName=\(String(describing: thread.forumName)) authorID=\(thread.author.id)")
+    func testHotWireDecodesThreadIDFromField1() throws {
+        assertField(try decodedWireThreadInfo().id, 9001)
+    }
 
-        // Compared as one labelled list on purpose: a failing assertion then
-        // prints every decoded and mapped value at once, so a wrong expectation
-        // is visible without a separate run per field.
-        XCTAssertEqual(
-            [
-                "id(1)=\(threadInfo.id)",
-                "title(3)=\(threadInfo.title)",
-                "replyNum(4)=\(threadInfo.replyNum)",
-                "forumId(27)=\(threadInfo.forumID)",
-                "forumName(28)=\(threadInfo.forumName)",
-                "authorId(56)=\(threadInfo.authorID)"
-            ],
-            [
-                "id(1)=9001",
-                "title(3)=线格式热点帖",
-                "replyNum(4)=7",
-                "forumId(27)=555",
-                "forumName(28)=热点吧",
-                "authorId(56)=77"
-            ],
-            "手写线格式字节必须按字段号解出原始值"
-        )
+    func testHotWireDecodesThreadTitleFromField3() throws {
+        assertField(try decodedWireThreadInfo().title, "线格式热点帖")
+    }
 
-        XCTAssertEqual(
-            [
-                "id=\(thread.id)",
-                "title=\(thread.title)",
-                "replyCount=\(thread.replyCount)",
-                "forumID=\(String(describing: thread.forumID))",
-                "forumName=\(String(describing: thread.forumName))",
-                "author.id=\(thread.author.id)"
-            ],
-            [
-                "id=9001",
-                "title=线格式热点帖",
-                "replyCount=7",
-                "forumID=Optional(555)",
-                "forumName=Optional(热点吧)",
-                "author.id=77"
-            ],
-            "热点帖子必须走与其他信息流相同的 ThreadMapper"
-        )
+    func testHotWireDecodesThreadReplyNumFromField4() throws {
+        assertField(try decodedWireThreadInfo().replyNum, 7)
+    }
+
+    func testHotWireDecodesThreadForumIDFromField27() throws {
+        assertField(try decodedWireThreadInfo().forumID, 555)
+    }
+
+    func testHotWireDecodesThreadForumNameFromField28() throws {
+        assertField(try decodedWireThreadInfo().forumName, "热点吧")
+    }
+
+    func testHotWireDecodesThreadAuthorIDFromField56() throws {
+        assertField(try decodedWireThreadInfo().authorID, 77)
+    }
+
+    func testHotThreadMapsIDFromWireBytes() throws {
+        assertField(try mappedWireThread().id, 9001)
+    }
+
+    func testHotThreadMapsTitleFromWireBytes() throws {
+        assertField(try mappedWireThread().title, "线格式热点帖")
+    }
+
+    func testHotThreadMapsReplyCountFromWireBytes() throws {
+        assertField(try mappedWireThread().replyCount, 7)
+    }
+
+    func testHotThreadMapsForumIDFromWireBytes() throws {
+        assertField(try mappedWireThread().forumID, 555)
+    }
+
+    func testHotThreadMapsForumNameFromWireBytes() throws {
+        assertField(try mappedWireThread().forumName, "热点吧")
+    }
+
+    func testHotThreadMapsAuthorIDFromWireBytes() throws {
+        assertField(try mappedWireThread().author.id, 77)
     }
 
     func testTabsWithoutCodeOrNameAreDropped() {
