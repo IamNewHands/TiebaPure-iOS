@@ -166,15 +166,56 @@ final class HotThreadListTests: XCTestCase {
         let wireData = try XCTUnwrap(Self.data(hex: Self.hotThreadWireHex))
         let decoded = try Tieba_HotThreadList_HotThreadListResponse(serializedBytes: wireData)
         let threadInfo = try XCTUnwrap(decoded.data.threadInfo.first)
-
         let thread = ThreadMapper.fromThreadInfo(threadInfo, usersByID: [:])
 
-        XCTAssertEqual(thread.id, 9001, "id(1) 必须解出")
-        XCTAssertEqual(thread.title, "线格式热点帖", "title(3) 必须解出")
-        XCTAssertEqual(thread.replyCount, 7, "replyNum(4) 必须解出")
-        XCTAssertEqual(thread.forumID, 555, "forumId(27) 必须解出")
-        XCTAssertEqual(thread.forumName, "热点吧", "forumName(28) 必须解出")
-        XCTAssertEqual(thread.author.id, 77, "authorId(56) 必须落成作者 id")
+        // The runner keeps stdout but not the .xcresult, so the values are
+        // printed as well as asserted: a failing run then shows what the wire
+        // bytes actually produced instead of only the failing test's name.
+        print("HOTWIRE decoded id=\(threadInfo.id) title=\(threadInfo.title) replyNum=\(threadInfo.replyNum) forumId=\(threadInfo.forumID) forumName=\(threadInfo.forumName) authorId=\(threadInfo.authorID)")
+        print("HOTMAP id=\(thread.id) title=\(thread.title) replyCount=\(thread.replyCount) forumID=\(String(describing: thread.forumID)) forumName=\(String(describing: thread.forumName)) authorID=\(thread.author.id)")
+
+        // Compared as one labelled list on purpose: a failing assertion then
+        // prints every decoded and mapped value at once, so a wrong expectation
+        // is visible without a separate run per field.
+        XCTAssertEqual(
+            [
+                "id(1)=\(threadInfo.id)",
+                "title(3)=\(threadInfo.title)",
+                "replyNum(4)=\(threadInfo.replyNum)",
+                "forumId(27)=\(threadInfo.forumID)",
+                "forumName(28)=\(threadInfo.forumName)",
+                "authorId(56)=\(threadInfo.authorID)"
+            ],
+            [
+                "id(1)=9001",
+                "title(3)=线格式热点帖",
+                "replyNum(4)=7",
+                "forumId(27)=555",
+                "forumName(28)=热点吧",
+                "authorId(56)=77"
+            ],
+            "手写线格式字节必须按字段号解出原始值"
+        )
+
+        XCTAssertEqual(
+            [
+                "id=\(thread.id)",
+                "title=\(thread.title)",
+                "replyCount=\(thread.replyCount)",
+                "forumID=\(String(describing: thread.forumID))",
+                "forumName=\(String(describing: thread.forumName))",
+                "author.id=\(thread.author.id)"
+            ],
+            [
+                "id=9001",
+                "title=线格式热点帖",
+                "replyCount=7",
+                "forumID=Optional(555)",
+                "forumName=Optional(热点吧)",
+                "author.id=77"
+            ],
+            "热点帖子必须走与其他信息流相同的 ThreadMapper"
+        )
     }
 
     func testTabsWithoutCodeOrNameAreDropped() {
