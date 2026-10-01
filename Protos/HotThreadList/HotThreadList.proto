@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package tieba.hotThreadList;
+
+import "CommonRequest.proto";
+import "Error.proto";
+import "ThreadInfo.proto";
+
+// Project-maintained projection of the hot-thread (热榜) endpoint. Field numbers
+// are wire identifiers and must only change with a matching fixture update.
+// Only the fields TiebaPure reads are declared; the topic list and inner tabs
+// the endpoint also returns are skipped by Protobuf as unknown fields.
+
+message FrsTabInfo {
+  string tab_name = 3;
+  string tab_code = 8;
+}
+
+message HotThreadListRequestData {
+  tieba.CommonRequest common = 1;
+  string tab_id = 2;
+  string tab_code = 3;
+}
+
+message HotThreadListRequest {
+  HotThreadListRequestData data = 1;
+}
+
+message HotThreadListResponseData {
+  repeated tieba.ThreadInfo thread_info = 2;
+  repeated FrsTabInfo hot_thread_tab_info = 3;
+}
+
+message HotThreadListResponse {
+  tieba.Error error = 1;
+  HotThreadListResponseData data = 2;
+}

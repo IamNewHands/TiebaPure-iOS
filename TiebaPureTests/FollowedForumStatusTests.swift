@@ -80,7 +80,7 @@ final class FollowedForumStatusTests: XCTestCase {
 
         let response = try JSONDecoder().decode(FollowedForumGuideResponseDTO.self, from: Data(json.utf8))
 
-        XCTAssertEqual(response.data?.forums, [])
+        XCTAssertEqual(response.data?.forums.isEmpty, true)
         XCTAssertEqual(response.data?.hasMore, true)
     }
 

@@ -18,6 +18,7 @@ struct HomeView: View {
 
     @ObservedObject private var blocklistStore = BlocklistStore.shared
     @State private var activeSearch: SearchRoute?
+    @State private var feedSegment: HomeFeedSegment = .recommended
     @State private var threads: [ThreadSummary] = []
     @State private var page = 1
     @State private var hasMore = true
@@ -88,20 +89,9 @@ struct HomeView: View {
     }
 
     private var feedColumn: some View {
-        ScrollViewReader { scrollProxy in
-            refreshableScrollView {
-                feedContent
-            }
-            .onChange(of: scrollToTopRequest) { _ in
-                // Feed changes during an animated scroll-to-top can make the
-                // lazy layout update endlessly on iOS 26. Finish the jump in
-                // a transaction that cannot inherit the refresh animation.
-                var transaction = Transaction(animation: nil)
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    scrollProxy.scrollTo(HomeScrollTarget.top, anchor: .top)
-                }
-            }
+        VStack(spacing: 0) {
+            feedSegmentPicker
+            feedSegmentContent
         }
         .navigationTitle("首页")
         .navigationBarTitleDisplayMode(.inline)
@@ -224,6 +214,55 @@ struct HomeView: View {
             isLoading = false
             pendingPaginationRequest = false
             paginationRequestScheduled = false
+        }
+    }
+
+    private var feedSegmentPicker: some View {
+        Picker("首页分页", selection: $feedSegment) {
+            ForEach(HomeFeedSegment.allCases) { segment in
+                Text(segment.title)
+                    .tag(segment)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, TiebaPureTheme.Spacing.md)
+        .padding(.vertical, TiebaPureTheme.Spacing.xs)
+        .background(TiebaPureTheme.ColorToken.readerGroupedBackground)
+        .accessibilityIdentifier("home-feed-segment-picker")
+    }
+
+    @ViewBuilder
+    private var feedSegmentContent: some View {
+        switch feedSegment {
+        case .recommended:
+            recommendedFeedColumn
+        case .hot:
+            HotThreadsView(
+                account: account,
+                onOpenThread: { openThread($0) },
+                onOpenComments: { openThread($0, initialDestination: .replies) },
+                onOpenForum: openForum,
+                onOpenUser: { openUser($0, sourceThreadID: nil) }
+            )
+            .accessibilityIdentifier("home-hot-feed")
+        }
+    }
+
+    private var recommendedFeedColumn: some View {
+        ScrollViewReader { scrollProxy in
+            refreshableScrollView {
+                feedContent
+            }
+            .onChange(of: scrollToTopRequest) { _ in
+                // Feed changes during an animated scroll-to-top can make the
+                // lazy layout update endlessly on iOS 26. Finish the jump in
+                // a transaction that cannot inherit the refresh animation.
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    scrollProxy.scrollTo(HomeScrollTarget.top, anchor: .top)
+                }
+            }
         }
     }
 

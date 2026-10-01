@@ -51,6 +51,7 @@ protocol TiebaAPIService {
     func setForumFollowed(account: Account, forum: Forum, followed: Bool) async throws -> ForumMembership
     func signForum(account: Account, forum: Forum) async throws -> ForumSignResult
     func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus]
+    func hotThreads(account: Account?, tabCode: String) async throws -> HotFeed
     func accountThreadFavorites(account: Account, page: Int) async throws -> AccountThreadFavoritesPage
     func setAccountThreadFavorite(
         account: Account,
@@ -83,6 +84,12 @@ extension TiebaAPIService {
     /// Level and check-in state per followed forum is optional: services without
     /// the guide listing reject it rather than reporting a wrong level.
     func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus] {
+        throw UserProfileMutationError.unsupportedByService
+    }
+
+    /// The hot-thread tab is optional: services without that endpoint reject it
+    /// so the tab can show an unavailable state instead of an empty list.
+    func hotThreads(account: Account?, tabCode: String) async throws -> HotFeed {
         throw UserProfileMutationError.unsupportedByService
     }
 

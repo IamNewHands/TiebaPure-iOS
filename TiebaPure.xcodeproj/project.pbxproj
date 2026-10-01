@@ -45,6 +45,7 @@
 		3350633EF8736792C66DA2B4 /* MeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D671D758CEF85777E7C7D8E4 /* MeView.swift */; };
 		34511F43DA6B267EB2816388 /* FixtureDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4A700D0BB079E5CEC104C1 /* FixtureDecodingTests.swift */; };
 		35D97F8C9E055B516F478254 /* TiebaForumSignAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722158AB6808A4470B0BDE41 /* TiebaForumSignAPI.swift */; };
+		812B7F56371C6912B28ED936 /* TiebaHotAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2C77D644C1BCC71A19B7E6 /* TiebaHotAPI.swift */; };
 		35DB68280B2FAF0F4C1493B9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 37E6671F9A9A069EADCFAFB9 /* PrivacyInfo.xcprivacy */; };
 		3788E594CA3F66F7C738E184 /* ThreadPageMainPostPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D748C5A77D226EAD9A7EEB85 /* ThreadPageMainPostPolicyTests.swift */; };
 		388FED0A277CBB09D2C252F5 /* TiebaEmoticonRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9BED7F7A1BE8C617FE2F15 /* TiebaEmoticonRepository.swift */; };
@@ -60,6 +61,7 @@
 		42DE9B83B9572D1EA986C997 /* AppPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B3F485FB45C4828FD7C5C6 /* AppPersistence.swift */; };
 		4336E79CF69F763DE348DB22 /* ImageViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF02A66EF1B9089518F9ED99 /* ImageViewer.swift */; };
 		437B6FDDA2747BECF4DB14FD /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9769DFBF55471E036C585C /* HomeView.swift */; };
+		C077AD29A2EEDF385895F71C /* HotThreadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9F0CA6FF234A363DA6DD8B /* HotThreadsView.swift */; };
 		450F423517B8D1DEFD51B15B /* TiebaURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE43843ABF0E6FE36F6A7BD /* TiebaURLTests.swift */; };
 		45FA5C71106C0E325C3D4798 /* CompatibleValueChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40014AEAB18EA73BA47B8C64 /* CompatibleValueChange.swift */; };
 		470AA98A8CA5F65598F45AFF /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D2754EBACAEEB97F2E3E7E /* UserProfileView.swift */; };
@@ -97,6 +99,7 @@
 		691639A3C4F64DE3F892A98D /* ContentBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B4550B620AEBC6B7EA4F46 /* ContentBlockView.swift */; };
 		6A3F2F36CE6C23941BD07F7E /* MediaPreviewPresentationArbiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A89193F661C5F61F3470AC /* MediaPreviewPresentationArbiter.swift */; };
 		6B31188D9AA7AE70A00D53EF /* HomeNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F66E0D4FBBBBF5F6DA8C979 /* HomeNavigationTests.swift */; };
+		AD55E23A554A4A0B72C90EE9 /* HotThreadListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04E60C7ED62E5C0A892BB1A /* HotThreadListTests.swift */; };
 		6BF8CB32442EA2DD70E1BEE9 /* SocialRelationshipStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A829A6D2ABD0F1D55D90E6 /* SocialRelationshipStateTests.swift */; };
 		7189EC19091324F1EF6886C5 /* OrderedCollectionPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC583D811BB2682A40FF679 /* OrderedCollectionPersistence.swift */; };
 		71CE2CA03E418210ED2CCF8B /* CapsuleLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */; };
@@ -129,6 +132,7 @@
 		9FCC42B360A1683D6696808F /* ContentSubmissionSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A4C581F09C568D7DFC25D8 /* ContentSubmissionSettings.swift */; };
 		A4FCD6601BAA005BF0F264D0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11227FF243EF6E0046E5C4A1 /* RootView.swift */; };
 		A5757E03976CA021ADE696FB /* Personalized.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6711EB46FB5BE95EF86ACB6 /* Personalized.pb.swift */; };
+		E85FEF3819D5A59D9268F003 /* HotThreadList_HotThreadList.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B0CAD48A9BFC086A6DDB57 /* HotThreadList_HotThreadList.pb.swift */; };
 		A6537596454795C265B252AD /* TiebaRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9A3625B3F19C2F07165809 /* TiebaRequestBuilder.swift */; };
 		A79F6207D35B14A52B3CDD6A /* ContentDraftCodecPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37648A3CE4B69FBC511A204 /* ContentDraftCodecPolicyTests.swift */; };
 		A7AA9BC4E07A165C672FAC44 /* ZhiBoInfoTW.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57251BD2DFECD14E39C9442A /* ZhiBoInfoTW.pb.swift */; };
@@ -212,6 +216,7 @@
 		F5B1D066296990A96D69CC0C /* SavedThreadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460C7E1E4622409127D0F888 /* SavedThreadTests.swift */; };
 		F60F13E9F3CF7AA790EE1C4A /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C6EE1B24CFBA1308B81FD41 /* MessagesView.swift */; };
 		F81A17ADFC8827935D28CB43 /* Forum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E92E90BB801373B85685DDD /* Forum.swift */; };
+		B76F13FF5FFF86BBA71C8400 /* HotFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C38F7EFF8D85D3D35956A57 /* HotFeed.swift */; };
 		F91AF0FEAF078DC66EA3C184 /* AppPosInfo.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3312A539F9532E1B21FD622 /* AppPosInfo.pb.swift */; };
 		FA2D7EBC13B9CDAE43B9DAC0 /* SearchAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60B7C87AF367770BAF70762 /* SearchAPITests.swift */; };
 		FA74FB79B01F1BE9C5A98873 /* ContentSubmissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8FC3906D642656961F9DAE4 /* ContentSubmissionCoordinator.swift */; };
@@ -353,6 +358,7 @@
 		5E2FAEA095A18F41BED60B8D /* EmoticonResourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmoticonResourceTests.swift; sourceTree = "<group>"; };
 		5E7B54C9EC311DDB57FEBB4F /* ThreadAuthorBadgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadAuthorBadgeTests.swift; sourceTree = "<group>"; };
 		5E92E90BB801373B85685DDD /* Forum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forum.swift; sourceTree = "<group>"; };
+		1C38F7EFF8D85D3D35956A57 /* HotFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotFeed.swift; sourceTree = "<group>"; };
 		622845B4F081A6D04395156C /* ContentReplyFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentReplyFeatureTests.swift; sourceTree = "<group>"; };
 		62D2754EBACAEEB97F2E3E7E /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
 		638DEF254549D0D4DE625487 /* ReadingPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPreferences.swift; sourceTree = "<group>"; };
@@ -365,10 +371,12 @@
 		6A68DE1DD356B7AC4AB669F8 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		6AD842C2F8EBE015B4F98443 /* Abstract.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Abstract.pb.swift; sourceTree = "<group>"; };
 		6B9769DFBF55471E036C585C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		EC9F0CA6FF234A363DA6DD8B /* HotThreadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotThreadsView.swift; sourceTree = "<group>"; };
 		6BBA032F531024778CFC5C0A /* SecureFilePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureFilePersistence.swift; sourceTree = "<group>"; };
 		6E308EC64EE7E7737CA03AE5 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		703A3E007139EC93BECB057F /* OwnThreadMutationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnThreadMutationState.swift; sourceTree = "<group>"; };
 		722158AB6808A4470B0BDE41 /* TiebaForumSignAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaForumSignAPI.swift; sourceTree = "<group>"; };
+		4F2C77D644C1BCC71A19B7E6 /* TiebaHotAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaHotAPI.swift; sourceTree = "<group>"; };
 		7294F83ED412C768AFA77BCB /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		72A829A6D2ABD0F1D55D90E6 /* SocialRelationshipStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialRelationshipStateTests.swift; sourceTree = "<group>"; };
 		77980DB0EC284A4F53AA4028 /* FileContentDraftPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileContentDraftPersistence.swift; sourceTree = "<group>"; };
@@ -405,6 +413,7 @@
 		9DC309A0384A60EB41BF7B46 /* LegacyScrollTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyScrollTelemetry.swift; sourceTree = "<group>"; };
 		9F1C4599FA7188B0D810AE19 /* UserProfileMutationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileMutationTests.swift; sourceTree = "<group>"; };
 		9F66E0D4FBBBBF5F6DA8C979 /* HomeNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeNavigationTests.swift; sourceTree = "<group>"; };
+		D04E60C7ED62E5C0A892BB1A /* HotThreadListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotThreadListTests.swift; sourceTree = "<group>"; };
 		A37648A3CE4B69FBC511A204 /* ContentDraftCodecPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDraftCodecPolicyTests.swift; sourceTree = "<group>"; };
 		A87CD00DD298F86614F66AAD /* Lbs.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lbs.pb.swift; sourceTree = "<group>"; };
 		A8FC3906D642656961F9DAE4 /* ContentSubmissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentSubmissionCoordinator.swift; sourceTree = "<group>"; };
@@ -440,6 +449,7 @@
 		D1180626C13544DCC568FA5B /* AccountThreadFavoritesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountThreadFavoritesTests.swift; sourceTree = "<group>"; };
 		D31CA90EA6BEF04EEA9AD1C3 /* TiebaContentFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaContentFilter.swift; sourceTree = "<group>"; };
 		D6711EB46FB5BE95EF86ACB6 /* Personalized.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Personalized.pb.swift; sourceTree = "<group>"; };
+		95B0CAD48A9BFC086A6DDB57 /* HotThreadList_HotThreadList.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotThreadList_HotThreadList.pb.swift; sourceTree = "<group>"; };
 		D671D758CEF85777E7C7D8E4 /* MeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeView.swift; sourceTree = "<group>"; };
 		D675F69938E6B1281FC28A54 /* ContentDraftPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDraftPersistence.swift; sourceTree = "<group>"; };
 		D748C5A77D226EAD9A7EEB85 /* ThreadPageMainPostPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadPageMainPostPolicyTests.swift; sourceTree = "<group>"; };
@@ -518,6 +528,7 @@
 				07C158046155BBD6748519CF /* TiebaContentSubmissionAPI.swift */,
 				33822A8A48EC0393DD592DDA /* TiebaEndpoint.swift */,
 				722158AB6808A4470B0BDE41 /* TiebaForumSignAPI.swift */,
+				4F2C77D644C1BCC71A19B7E6 /* TiebaHotAPI.swift */,
 				AFF65BFE5160CFC6F1F12CEF /* TiebaHTTPClient.swift */,
 				47A8570B3E26BDD92BF4524C /* TiebaMessageAPI.swift */,
 				AC28DAC5B04603ABECBEBF97 /* TiebaPostingBootstrap.swift */,
@@ -574,6 +585,7 @@
 				2F8B5E81584991818D0E2DA6 /* PbPage_PbPageRequest.pb.swift */,
 				0E50CC9DC6A0FEE9D095B963 /* PbPage_PbPageResponse.pb.swift */,
 				D6711EB46FB5BE95EF86ACB6 /* Personalized.pb.swift */,
+				95B0CAD48A9BFC086A6DDB57 /* HotThreadList_HotThreadList.pb.swift */,
 				BA50FDF3AC3742333D5202EC /* Post.pb.swift */,
 				0F167B1D47EFED83CEE70F2D /* SimpleForum.pb.swift */,
 				FDB42F9B13D5397C990ED17F /* SubPost.pb.swift */,
@@ -631,6 +643,7 @@
 				77980DB0EC284A4F53AA4028 /* FileContentDraftPersistence.swift */,
 				B9A92826CC55F5EE91B72934 /* FileOrderedCollectionPersistence.swift */,
 				5E92E90BB801373B85685DDD /* Forum.swift */,
+				1C38F7EFF8D85D3D35956A57 /* HotFeed.swift */,
 				7E4CFA3390403419B8C3E890 /* ForumSignSettings.swift */,
 				93E0B943190782C7374C3690 /* ForumThreadCategory.swift */,
 				8B097E875FE8B825D77AD05F /* LocalThreadLibrary.swift */,
@@ -760,6 +773,7 @@
 				3530125D224F55B435E632F2 /* FollowedForumStatusTests.swift */,
 				CBF457C95754D5EAA87ECEFD /* ForumSignTests.swift */,
 				9F66E0D4FBBBBF5F6DA8C979 /* HomeNavigationTests.swift */,
+				D04E60C7ED62E5C0A892BB1A /* HotThreadListTests.swift */,
 				99D55E6E9D9C9BE0630B5C89 /* InlineTextReuseTests.swift */,
 				1781B1F0906AC36975BFDE9F /* LegacyScrollTelemetryTests.swift */,
 				DE6967B15A66331DA9F947F0 /* MessageAPITests.swift */,
@@ -934,6 +948,7 @@
 			isa = PBXGroup;
 			children = (
 				6B9769DFBF55471E036C585C /* HomeView.swift */,
+				EC9F0CA6FF234A363DA6DD8B /* HotThreadsView.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -1173,6 +1188,7 @@
 				4ED79FF1DB72B276E756EBF2 /* FixtureTiebaAPI.swift in Sources */,
 				9B869CC8E0EE590D0B003B40 /* FollowedUsersView.swift in Sources */,
 				F81A17ADFC8827935D28CB43 /* Forum.swift in Sources */,
+				B76F13FF5FFF86BBA71C8400 /* HotFeed.swift in Sources */,
 				C144376E190882BF6A323835 /* ForumHubView.swift in Sources */,
 				90A1EF7B8679DC1058702486 /* ForumListView.swift in Sources */,
 				884DB9F5E1CF43887524D6EC /* ForumMapper.swift in Sources */,
@@ -1183,6 +1199,7 @@
 				8CF348082F0201BCE9ED6E27 /* ForumThreadsView.swift in Sources */,
 				0E9AD304E9D62F985EBE1408 /* FrsPage_FrsPage.pb.swift in Sources */,
 				437B6FDDA2747BECF4DB14FD /* HomeView.swift in Sources */,
+				C077AD29A2EEDF385895F71C /* HotThreadsView.swift in Sources */,
 				B152F8A68F8CB2ACBCD895AD /* ImageDownloadService.swift in Sources */,
 				4336E79CF69F763DE348DB22 /* ImageViewer.swift in Sources */,
 				CCA17993A164DE84409AF929 /* InteractiveNavigationPop.swift in Sources */,
@@ -1212,6 +1229,7 @@
 				09C2C3D3FC8AA2D05ACBF2F0 /* PbPage_PbPageResponse.pb.swift in Sources */,
 				89CFC3B17B93F48527220A39 /* PersistencePrimitives.swift in Sources */,
 				A5757E03976CA021ADE696FB /* Personalized.pb.swift in Sources */,
+				E85FEF3819D5A59D9268F003 /* HotThreadList_HotThreadList.pb.swift in Sources */,
 				4D7D3D4E33E7C375230D2F29 /* Post.pb.swift in Sources */,
 				DB3881EB1B055DE5583FBE65 /* Post.swift in Sources */,
 				2C654A00A0C56273D59EB465 /* PostMapper.swift in Sources */,
@@ -1256,6 +1274,7 @@
 				388FED0A277CBB09D2C252F5 /* TiebaEmoticonRepository.swift in Sources */,
 				D7C5F5C2AC1C00249AD9BC1E /* TiebaEndpoint.swift in Sources */,
 				35D97F8C9E055B516F478254 /* TiebaForumSignAPI.swift in Sources */,
+				812B7F56371C6912B28ED936 /* TiebaHotAPI.swift in Sources */,
 				EAADABB00751D25DB084C26D /* TiebaHTTPClient.swift in Sources */,
 				2450C4AB99C06D9CABEC5EBE /* TiebaMessageAPI.swift in Sources */,
 				7A6AB3811639046A81C2CB53 /* TiebaPostingBootstrap.swift in Sources */,
@@ -1312,6 +1331,7 @@
 				E1E35B36146715FAD1408C0D /* FollowedForumStatusTests.swift in Sources */,
 				15DF8B955B68CF4317A10AE7 /* ForumSignTests.swift in Sources */,
 				6B31188D9AA7AE70A00D53EF /* HomeNavigationTests.swift in Sources */,
+				AD55E23A554A4A0B72C90EE9 /* HotThreadListTests.swift in Sources */,
 				E209C76E1A8310E8F94F6A32 /* InlineTextReuseTests.swift in Sources */,
 				D774D89D5189D8CB9A1D877B /* LegacyScrollTelemetryTests.swift in Sources */,
 				80D70D09DAD45ED618094984 /* MessageAPITests.swift in Sources */,
