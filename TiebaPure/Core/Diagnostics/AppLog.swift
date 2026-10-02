@@ -145,7 +145,7 @@ enum DiagnosticRedaction {
             "\(captured(in: match, in: source))=\(placeholder)"
         }
         return substitute(longBlobPattern, in: withoutCookieSecrets) { match, source in
-            "\(placeholder)(\(match.range(in: source).count) chars)"
+            "\(placeholder)(\(match.range(in: source).length) chars)"
         }
     }
 
@@ -187,22 +187,31 @@ enum DiagnosticRedaction {
 /// reported only for the numeric and boolean leaves that make an error code
 /// readable, and object/array keys are reported in full.
 enum DiagnosticJSON {
-    static func skeleton(_ data: Data, maxEntries: Int = 4) -> String {
+    /// A forum guide row has a handful of fields, so the sample is generous
+    /// enough to show a real shape while a pathological payload still prints
+    /// a readable prefix.
+    private static let maxEntriesPerObject = 6
+
+    static func skeleton(_ data: Data) -> String {
         let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
         return describe(object, depth: 0)
     }
 
     static func describe(_ value: Any?, depth: Int) -> String {
-        guard depth < 4 else { return "…"}
+        // A guide row nests four levels deep (root → data → array → row), so the
+        // limit has to clear that or every scalar leaf prints as an ellipsis.
+        guard depth < 6 else { return "…"}
         switch value {
         case let dictionary as [String: Any]:
             let keys = dictionary.keys.sorted()
             guard keys.isEmpty == false else { return "{}"}
             let body = keys
-                .prefix(maxEntries)
+                .prefix(maxEntriesPerObject)
                 .map { "\($0): \(describe(dictionary[$0], depth: depth + 1))" }
                 .joined(separator: ", ")
-            let rest = keys.count > maxEntries ? ", …\(keys.count - maxEntries) more" : ""
+            let rest = keys.count > maxEntriesPerObject
+                ? ", …\(keys.count - maxEntriesPerObject) more"
+                : ""
             return "{\(body)\(rest)}"
         case let array as [Any]:
             guard let first = array.first else { return "[]"}
