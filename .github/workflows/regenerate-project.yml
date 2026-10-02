@@ -1,9 +1,10 @@
 name: Regenerate Xcode project
 
-# Temporary helper. The release gate compares the committed TiebaPure.xcodeproj
-# against a fresh `xcodegen generate`, and the project file has to be updated by
-# hand whenever a Swift file is added. This workflow uploads the generated
-# project so that update does not need a failing release run.
+# Helper for the release gate. That gate compares the committed
+# TiebaPure.xcodeproj against a fresh `xcodegen generate`, and the project file
+# has to be updated by hand whenever a Swift file is added. Running this
+# workflow uploads the generated project so that update does not need a failing
+# release run, and the result can be committed as-is.
 on:
   workflow_dispatch:
 
