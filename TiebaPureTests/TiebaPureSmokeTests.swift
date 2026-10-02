@@ -3151,6 +3151,48 @@ final class TiebaPureSmokeTests: XCTestCase {
         ))
     }
 
+    func testHomeFeedSwipeMovesBetweenTheOnlyTwoSegments() {
+        XCTAssertEqual(HomeFeedSwipePolicy.toggled(.recommended), .hot)
+        XCTAssertEqual(HomeFeedSwipePolicy.toggled(.hot), .recommended)
+    }
+
+    func testHomeFeedSwipeAcceptsDeliberateHorizontalDragsInEitherDirection() {
+        // A right swipe leaves 推荐 for 热点; a left swipe leaves 热点 for 推荐.
+        // Both directions are the same toggle, so both must be accepted.
+        XCTAssertTrue(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(width: 120, height: 8)
+        ))
+        XCTAssertTrue(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(width: -120, height: 8)
+        ))
+        XCTAssertTrue(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(
+                width: HomeFeedSwipePolicy.minimumHorizontalDistance,
+                height: 0
+            )
+        ))
+    }
+
+    func testHomeFeedSwipeRejectsVerticalScrollsShortDragsAndDiagonals() {
+        // A vertical scroll with a little sideways drift must stay a scroll.
+        XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(width: 4, height: 220)
+        ))
+        XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(
+                width: HomeFeedSwipePolicy.minimumHorizontalDistance - 1,
+                height: 0
+            )
+        ))
+        XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(width: 30, height: 0)
+        ))
+        XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(
+            translation: CGSize(width: 80, height: 80)
+        ))
+        XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(translation: .zero))
+    }
+
     func testRootTabHitTesterMapsBottomTabRegions() {
         let centeredIPadFrames = [
             CGRect(x: 280, y: 0, width: 80, height: 49),

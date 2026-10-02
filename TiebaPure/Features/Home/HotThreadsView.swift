@@ -28,6 +28,57 @@ enum HomeFeedSegment: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Decides whether a finished drag is a deliberate horizontal swipe between the
+/// two home segments. 推荐 and 热点 are the only segments, so a swipe in either
+/// direction moves to the other one: a right swipe leaves 推荐 for 热点, and a
+/// left swipe leaves 热点 for 推荐.
+///
+/// The feed itself scrolls vertically, so a drag only counts once it is clearly
+/// horizontal — otherwise a normal scroll with a little sideways drift would
+/// jump the user to the other segment mid-read.
+enum HomeFeedSwipePolicy {
+    /// Drags shorter than this are scroll jitter, not a segment switch.
+    static let minimumHorizontalDistance: CGFloat = 60
+    /// A drag this diagonal or steeper stays a scroll.
+    static let maximumVerticalToHorizontalRatio: CGFloat = 0.6
+    /// The drag recognizer needs a little travel before it reports a gesture at
+    /// all; the thresholds above still decide whether that gesture counts.
+    static let gestureMinimumDistance: CGFloat = 12
+
+    static func isHorizontalSwipe(translation: CGSize) -> Bool {
+        let horizontalDistance = abs(translation.width)
+        let verticalDistance = abs(translation.height)
+        guard horizontalDistance >= minimumHorizontalDistance else { return false }
+        return verticalDistance <= horizontalDistance * maximumVerticalToHorizontalRatio
+    }
+
+    static func toggled(_ segment: HomeFeedSegment) -> HomeFeedSegment {
+        switch segment {
+        case .recommended:
+            return .hot
+        case .hot:
+            return .recommended
+        }
+    }
+}
+
+extension View {
+    /// Reports only drags that end as a deliberate horizontal swipe. Attach it
+    /// to the scrolling feed, never to a horizontally scrollable bar, so the
+    /// bar keeps owning its own drags.
+    func homeFeedSwipeGesture(onSwipe: @escaping () -> Void) -> some View {
+        simultaneousGesture(
+            DragGesture(minimumDistance: HomeFeedSwipePolicy.gestureMinimumDistance)
+                .onEnded { value in
+                    guard HomeFeedSwipePolicy.isHorizontalSwipe(
+                        translation: value.translation
+                    ) else { return }
+                    onSwipe()
+                }
+        )
+    }
+}
+
 /// The 热点 half of the home feed.
 ///
 /// The endpoint answers one listing per sub-tab and takes no page parameter, so
@@ -44,6 +95,10 @@ struct HotThreadsView: View {
     let onOpenForum: (Forum) -> Void
     let onOpenUser: (UserSummary) -> Void
     let onOpenTopic: (HotTopic) -> Void
+    /// A horizontal swipe on the thread list switches the home segment. The
+    /// sub-tab bar is deliberately outside this gesture: its own horizontal
+    /// scroll owns drags that start there.
+    let onHorizontalSwipe: () -> Void
 
     @State private var tabs: [HotTab] = []
     @State private var topics: [HotTopic] = []
@@ -62,6 +117,7 @@ struct HotThreadsView: View {
             }
 
             feedContent
+                .homeFeedSwipeGesture(onSwipe: onHorizontalSwipe)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(TiebaPureTheme.ColorToken.readerGroupedBackground)

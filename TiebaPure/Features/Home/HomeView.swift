@@ -249,6 +249,7 @@ struct HomeView: View {
         switch feedSegment {
         case .recommended:
             recommendedFeedColumn
+                .homeFeedSwipeGesture { switchHomeFeedSegment() }
         case .hot:
             HotThreadsView(
                 account: account,
@@ -256,10 +257,18 @@ struct HomeView: View {
                 onOpenComments: { openThread($0, initialDestination: .replies) },
                 onOpenForum: openForum,
                 onOpenUser: { openUser($0, sourceThreadID: nil) },
-                onOpenTopic: { openTopic($0) }
+                onOpenTopic: { openTopic($0) },
+                onHorizontalSwipe: { switchHomeFeedSegment() }
             )
             .accessibilityIdentifier("home-hot-feed")
         }
+    }
+
+    /// A horizontal swipe moves to the other segment. Both feeds keep their own
+    /// vertical scrolling; the segmented picker stays the discoverable and
+    /// accessible way to switch, so the swipe only ever adds a shortcut.
+    private func switchHomeFeedSegment() {
+        feedSegment = HomeFeedSwipePolicy.toggled(feedSegment)
     }
 
     private var recommendedFeedColumn: some View {
