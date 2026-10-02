@@ -28,6 +28,86 @@ enum HomeFeedSegment: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Decides whether a finished drag is a deliberate horizontal swipe between the
+/// two home segments. 推荐 and 热点 are the only segments, so a swipe in either
+/// direction moves to the other one: a right swipe leaves 推荐 for 热点, and a
+/// left swipe leaves 热点 for 推荐.
+///
+/// The feed itself scrolls vertically, so a drag only counts once it is clearly
+/// horizontal — otherwise a normal scroll with a little sideways drift would
+/// jump the user to the other segment mid-read.
+enum HomeFeedSwipePolicy {
+    /// Drags shorter than this are scroll jitter, not a segment switch.
+    static let minimumHorizontalDistance: CGFloat = 60
+    /// A drag this diagonal or steeper stays a scroll.
+    static let maximumVerticalToHorizontalRatio: CGFloat = 0.6
+    /// The drag recognizer needs a little travel before it reports a gesture at
+    /// all; the thresholds above still decide whether that gesture counts.
+    static let gestureMinimumDistance: CGFloat = 12
+
+    static func isHorizontalSwipe(translation: CGSize) -> Bool {
+        let horizontalDistance = abs(translation.width)
+        let verticalDistance = abs(translation.height)
+        guard horizontalDistance >= minimumHorizontalDistance else { return false }
+        return verticalDistance <= horizontalDistance * maximumVerticalToHorizontalRatio
+    }
+
+    static func toggled(_ segment: HomeFeedSegment) -> HomeFeedSegment {
+        switch segment {
+        case .recommended:
+            return .hot
+        case .hot:
+            return .recommended
+        }
+    }
+}
+
+extension View {
+    /// Reports only drags that end as a deliberate horizontal swipe. Attach it
+    /// to the scrolling feed, never to a horizontally scrollable bar, so the
+    /// bar keeps owning its own drags.
+    func homeFeedSwipeGesture(onSwipe: @escaping () -> Void) -> some View {
+        simultaneousGesture(
+            DragGesture(minimumDistance: HomeFeedSwipePolicy.gestureMinimumDistance)
+                .onEnded { value in
+                    guard HomeFeedSwipePolicy.isHorizontalSwipe(
+                        translation: value.translation
+                    ) else { return }
+                    onSwipe()
+                }
+        )
+    }
+}
+
+/// 热点 keeps its listing for the whole session. Switching to 推荐 and back only
+/// hides and shows the same view, so re-activation must reuse the loaded
+/// listing instead of firing another request; the listing is dropped only when
+/// the account changes.
+enum HotFeedLoadPolicy {
+    static func shouldLoadOnActivation(isActive: Bool, didLoad: Bool) -> Bool {
+        isActive && didLoad == false
+    }
+}
+
+/// Which per-segment request counters a home-tab gesture must bump.
+///
+/// The home-tab gestures act on the segment that is on screen. Addressing the
+/// hidden segment as well would scroll it away from where the user left it and
+/// re-fetch a list nobody can see.
+struct HomeFeedGestureTargets: Equatable {
+    var scrollToTopSegment: HomeFeedSegment
+    var refreshSegment: HomeFeedSegment
+}
+
+enum HomeFeedGestureTargetPolicy {
+    static func targets(forActiveSegment active: HomeFeedSegment) -> HomeFeedGestureTargets {
+        HomeFeedGestureTargets(
+            scrollToTopSegment: active,
+            refreshSegment: active
+        )
+    }
+}
+
 /// The 热点 half of the home feed.
 ///
 /// The endpoint answers one listing per sub-tab and takes no page parameter, so
@@ -39,11 +119,23 @@ struct HotThreadsView: View {
     @ObservedObject private var blocklistStore = BlocklistStore.shared
 
     let account: Account?
+    /// Whether 热点 is the segment currently on screen. The view stays in the
+    /// hierarchy while 推荐 is shown, so this decides when the first load may
+    /// start; a later switch back must not fetch the listing again.
+    let isActive: Bool
+    /// Changed by a double tap on the 首页 tab: scroll the listing back to top.
+    let scrollToTopToken: Int
+    /// Changed by a long press on the 首页 tab: refresh the listing.
+    let refreshToken: Int
     let onOpenThread: (ThreadSummary) -> Void
     let onOpenComments: (ThreadSummary) -> Void
     let onOpenForum: (Forum) -> Void
     let onOpenUser: (UserSummary) -> Void
     let onOpenTopic: (HotTopic) -> Void
+    /// A horizontal swipe on the thread list switches the home segment. The
+    /// sub-tab bar is deliberately outside this gesture: its own horizontal
+    /// scroll owns drags that start there.
+    let onHorizontalSwipe: () -> Void
 
     @State private var tabs: [HotTab] = []
     @State private var topics: [HotTopic] = []
@@ -62,12 +154,25 @@ struct HotThreadsView: View {
             }
 
             feedContent
+                .homeFeedSwipeGesture(onSwipe: onHorizontalSwipe)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(TiebaPureTheme.ColorToken.readerGroupedBackground)
         .task {
-            guard didLoad == false else { return }
+            guard HotFeedLoadPolicy.shouldLoadOnActivation(
+                isActive: isActive,
+                didLoad: didLoad
+            ) else { return }
             await load(tabCode: selectedTabCode)
+        }
+        .onChange(of: isActive) { active in
+            // First switch to 热点 loads once; every later switch back reuses
+            // the listing already on screen.
+            guard HotFeedLoadPolicy.shouldLoadOnActivation(
+                isActive: active,
+                didLoad: didLoad
+            ) else { return }
+            Task { await load(tabCode: selectedTabCode) }
         }
         .onChange(of: account?.sessionIdentity) { _ in
             requestGeneration += 1
@@ -79,6 +184,12 @@ struct HotThreadsView: View {
             errorMessage = nil
             didLoad = false
             isLoading = false
+            // A hidden segment only drops its stale listing; the next
+            // activation loads the new account's data.
+            guard HotFeedLoadPolicy.shouldLoadOnActivation(
+                isActive: isActive,
+                didLoad: false
+            ) else { return }
             Task { await load(tabCode: selectedTabCode) }
         }
         .onDisappear {
@@ -205,79 +316,103 @@ struct HotThreadsView: View {
                 )
             }
         } else {
-            ScrollView {
-                LazyVStack(spacing: TiebaPureTheme.Spacing.sm, pinnedViews: []) {
-                    if topics.isEmpty == false {
-                        hotTopicSection
-                    }
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Scroll anchor for the double tap on the 首页 tab. It
+                        // sits outside the LazyVStack so it adds no spacing.
+                        Color.clear
+                            .frame(height: 0)
+                            .id(HotFeedScrollTarget.top)
 
-                    ForEach(threads) { thread in
-                        ForumThreadRow(
-                            thread: thread,
-                            presentation: .homeFeed,
-                            onOpenThread: { onOpenThread(thread) },
-                            onOpenForum: onOpenForum,
-                            onOpenUser: { onOpenUser($0) },
-                            onBlockForum: { blockedThread in
-                                blocklistStore.addForum(
-                                    id: blockedThread.forumID,
-                                    named: blockedThread.forumName
+                        LazyVStack(spacing: TiebaPureTheme.Spacing.sm, pinnedViews: []) {
+                            if topics.isEmpty == false {
+                                hotTopicSection
+                            }
+
+                            ForEach(threads) { thread in
+                                ForumThreadRow(
+                                    thread: thread,
+                                    presentation: .homeFeed,
+                                    onOpenThread: { onOpenThread(thread) },
+                                    onOpenForum: onOpenForum,
+                                    onOpenUser: { onOpenUser($0) },
+                                    onBlockForum: { blockedThread in
+                                        blocklistStore.addForum(
+                                            id: blockedThread.forumID,
+                                            named: blockedThread.forumName
+                                        )
+                                    },
+                                    onOpenMedia: { item, mediaItems, sourceFrame, sourceImage, sourceAnchor in
+                                        switch HomeMediaActionPolicy.action(for: item, in: mediaItems) {
+                                        case let .previewImages(images, index):
+                                            ImagePreviewCoordinator.shared.present(
+                                                ImagePreviewSession(
+                                                    images: images,
+                                                    initialIndex: index,
+                                                    sourceFrame: sourceFrame,
+                                                    sourceImage: sourceImage,
+                                                    sourceAnchor: sourceAnchor,
+                                                    prefetchesAdjacentPages: readingPreferences.mediaLoading != .manual
+                                                )
+                                            )
+                                        case let .playVideo(video):
+                                            VideoPreviewCoordinator.shared.present(
+                                                VideoPreviewSession(
+                                                    video: video,
+                                                    sourceFrame: sourceFrame,
+                                                    sourceImage: sourceImage,
+                                                    sourceAnchor: sourceAnchor
+                                                )
+                                            )
+                                        case .openThread:
+                                            onOpenThread(thread)
+                                        }
+                                    },
+                                    onOpenComments: { onOpenComments(thread) },
+                                    commentsAccessibilityIdentifier: "hot-comments-button-\(thread.id)"
                                 )
-                            },
-                            onOpenMedia: { item, mediaItems, sourceFrame, sourceImage, sourceAnchor in
-                                switch HomeMediaActionPolicy.action(for: item, in: mediaItems) {
-                                case let .previewImages(images, index):
-                                    ImagePreviewCoordinator.shared.present(
-                                        ImagePreviewSession(
-                                            images: images,
-                                            initialIndex: index,
-                                            sourceFrame: sourceFrame,
-                                            sourceImage: sourceImage,
-                                            sourceAnchor: sourceAnchor,
-                                            prefetchesAdjacentPages: readingPreferences.mediaLoading != .manual
-                                        )
-                                    )
-                                case let .playVideo(video):
-                                    VideoPreviewCoordinator.shared.present(
-                                        VideoPreviewSession(
-                                            video: video,
-                                            sourceFrame: sourceFrame,
-                                            sourceImage: sourceImage,
-                                            sourceAnchor: sourceAnchor
-                                        )
-                                    )
-                                case .openThread:
-                                    onOpenThread(thread)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("thread-row")
+                            }
+
+                            if let errorMessage {
+                                InlineLoadErrorView(message: errorMessage) {
+                                    Task { await reload() }
                                 }
-                            },
-                            onOpenComments: { onOpenComments(thread) },
-                            commentsAccessibilityIdentifier: "hot-comments-button-\(thread.id)"
-                        )
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("thread-row")
-                    }
+                            }
 
-                    if let errorMessage {
-                        InlineLoadErrorView(message: errorMessage) {
-                            Task { await reload() }
+                            Color.clear
+                                .frame(height: 64)
+                                .accessibilityHidden(true)
                         }
+                        .padding(.horizontal, TiebaPureTheme.Spacing.sm)
+                        .padding(.vertical, TiebaPureTheme.Spacing.sm)
+                        .readableWidth()
                     }
-
-                    Color.clear
-                        .frame(height: 64)
-                        .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, TiebaPureTheme.Spacing.sm)
-                .padding(.vertical, TiebaPureTheme.Spacing.sm)
-                .readableWidth()
-            }
-            .accessibilityIdentifier("hot-thread-scroll-view")
-            .shortPullRefresh(
-                isEnabled: didLoad && isLoading == false,
-                surface: .grouped,
-                accessibilityIdentifier: "hot-thread-refresh-animation"
-            ) {
-                await reload()
+                .accessibilityIdentifier("hot-thread-scroll-view")
+                .shortPullRefresh(
+                    isEnabled: didLoad && isLoading == false,
+                    surface: .grouped,
+                    accessibilityIdentifier: "hot-thread-refresh-animation",
+                    programmaticRefreshToken: refreshToken
+                ) { source in
+                    if source == .pullGesture {
+                        guard isLoading == false else { return }
+                    }
+                    await reload()
+                }
+                .onChange(of: scrollToTopToken) { _ in
+                    // Same transaction rules as the recommended feed: a lazy
+                    // layout update during an animated jump can loop on iOS 26.
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        scrollProxy.scrollTo(HotFeedScrollTarget.top, anchor: .top)
+                    }
+                }
             }
         }
     }
@@ -329,4 +464,8 @@ struct HotThreadsView: View {
         isLoading = false
         didLoad = true
     }
+}
+
+private enum HotFeedScrollTarget {
+    case top
 }

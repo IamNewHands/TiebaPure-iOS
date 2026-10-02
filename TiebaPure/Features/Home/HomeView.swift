@@ -26,9 +26,11 @@ struct HomeView: View {
     @State private var didLoad = false
     @State private var errorMessage: String?
     @State private var navigationPath: [HomeNavigationRoute] = []
-    @State private var programmaticRefreshToken = 0
+    @State private var recommendedRefreshToken = 0
+    @State private var hotRefreshToken = 0
     @State private var lastScenePhase: ScenePhase = .inactive
-    @State private var scrollToTopRequest = 0
+    @State private var recommendedScrollToTopRequest = 0
+    @State private var hotScrollToTopRequest = 0
     @State private var requestGeneration = 0
     @State private var loadTask: Task<[ThreadSummary], Error>?
     @State private var pendingPaginationRequest = false
@@ -70,16 +72,18 @@ struct HomeView: View {
             collapseHomeNavigation()
         }
         .onChange(of: scrollToTopToken) { _ in
-            // Double tap: return to the feed root and scroll to top, no
-            // refresh so the user can re-read what is already loaded.
+            // Double tap: return to the feed root and scroll the visible
+            // segment to top, no refresh so the user can re-read what is
+            // already loaded.
             collapseHomeNavigation()
-            scrollToTopRequest &+= 1
+            requestScrollToTopForVisibleSegment()
         }
         .onChange(of: refreshToken) { _ in
-            // Long press: return to the feed root, scroll to top, then refresh.
+            // Long press: return to the feed root, scroll to top, then refresh
+            // the visible segment.
             collapseHomeNavigation()
-            scrollToTopRequest &+= 1
-            programmaticRefreshToken &+= 1
+            requestScrollToTopForVisibleSegment()
+            requestRefreshForVisibleSegment()
         }
         .alert("提示", isPresented: likeActionErrorIsPresented) {
             Button("好", role: .cancel) { likeActionError = nil }
@@ -244,21 +248,69 @@ struct HomeView: View {
         .accessibilityIdentifier("home-feed-segment-picker")
     }
 
+    /// Both segments stay in the hierarchy, so switching only changes which one
+    /// is visible: 热点 keeps its listing and scroll position instead of
+    /// re-fetching every time the user swipes back to it. The hidden segment is
+    /// removed from hit testing and from the accessibility tree, so only the
+    /// visible feed is tappable, scrollable and readable.
     @ViewBuilder
     private var feedSegmentContent: some View {
-        switch feedSegment {
-        case .recommended:
+        ZStack {
             recommendedFeedColumn
-        case .hot:
+                .opacity(feedSegment == .recommended ? 1 : 0)
+                .allowsHitTesting(feedSegment == .recommended)
+                .accessibilityHidden(feedSegment != .recommended)
+                .homeFeedSwipeGesture { switchHomeFeedSegment() }
+
             HotThreadsView(
                 account: account,
+                isActive: feedSegment == .hot,
+                scrollToTopToken: hotScrollToTopRequest,
+                refreshToken: hotRefreshToken,
                 onOpenThread: { openThread($0) },
                 onOpenComments: { openThread($0, initialDestination: .replies) },
                 onOpenForum: openForum,
                 onOpenUser: { openUser($0, sourceThreadID: nil) },
-                onOpenTopic: { openTopic($0) }
+                onOpenTopic: { openTopic($0) },
+                onHorizontalSwipe: { switchHomeFeedSegment() }
             )
+            .opacity(feedSegment == .hot ? 1 : 0)
+            .allowsHitTesting(feedSegment == .hot)
+            .accessibilityHidden(feedSegment != .hot)
             .accessibilityIdentifier("home-hot-feed")
+        }
+    }
+
+    /// A horizontal swipe moves to the other segment. Both feeds keep their own
+    /// vertical scrolling; the segmented picker stays the discoverable and
+    /// accessible way to switch, so the swipe only ever adds a shortcut.
+    private func switchHomeFeedSegment() {
+        feedSegment = HomeFeedSwipePolicy.toggled(feedSegment)
+    }
+
+    /// The home-tab gestures address the segment on screen only; the hidden
+    /// feed keeps its position and is not re-fetched behind the user's back.
+    private func requestScrollToTopForVisibleSegment() {
+        let target = HomeFeedGestureTargetPolicy.targets(
+            forActiveSegment: feedSegment
+        )
+        switch target.scrollToTopSegment {
+        case .recommended:
+            recommendedScrollToTopRequest &+= 1
+        case .hot:
+            hotScrollToTopRequest &+= 1
+        }
+    }
+
+    private func requestRefreshForVisibleSegment() {
+        let target = HomeFeedGestureTargetPolicy.targets(
+            forActiveSegment: feedSegment
+        )
+        switch target.refreshSegment {
+        case .recommended:
+            recommendedRefreshToken &+= 1
+        case .hot:
+            hotRefreshToken &+= 1
         }
     }
 
@@ -267,7 +319,7 @@ struct HomeView: View {
             refreshableScrollView {
                 feedContent
             }
-            .onChange(of: scrollToTopRequest) { _ in
+            .onChange(of: recommendedScrollToTopRequest) { _ in
                 // Feed changes during an animated scroll-to-top can make the
                 // lazy layout update endlessly on iOS 26. Finish the jump in
                 // a transaction that cannot inherit the refresh animation.
@@ -623,7 +675,7 @@ struct HomeView: View {
             isEnabled: didLoad && isLoading == false,
             surface: .grouped,
             accessibilityIdentifier: "home-refresh-animation",
-            programmaticRefreshToken: programmaticRefreshToken
+            programmaticRefreshToken: recommendedRefreshToken
         ) { source in
             if source == .pullGesture {
                 guard isLoading == false else { return }
