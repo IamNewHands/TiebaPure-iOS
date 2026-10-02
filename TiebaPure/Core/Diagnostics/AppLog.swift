@@ -1,5 +1,38 @@
 import Foundation
 
+/// Whether the app keeps a diagnostic log at all.
+///
+/// The log exists to be handed back when a screen shows the wrong thing, so it
+/// is on until the user says otherwise. Turning it off has to stop the record
+/// rather than hide it, and the flag is read straight from `UserDefaults` so a
+/// call site can ask before building a message that would only be thrown away.
+struct DiagnosticLogSettings {
+    static let loggingKey = "dev.infinityf4p.tiebapure.diagnostics.logging-enabled"
+
+    private let defaults: UserDefaults
+    private let loggingKey: String
+
+    init(
+        defaults: UserDefaults = .standard,
+        loggingKey: String = DiagnosticLogSettings.loggingKey
+    ) {
+        self.defaults = defaults
+        self.loggingKey = loggingKey
+    }
+
+    /// Unset means on: a fresh install has to be able to record without being
+    /// asked first, or the first report of a broken screen arrives with no
+    /// evidence at all.
+    var isEnabled: Bool {
+        guard defaults.object(forKey: loggingKey) != nil else { return true }
+        return defaults.bool(forKey: loggingKey)
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: loggingKey)
+    }
+}
+
 /// A bounded, in-memory diagnostic log the user can export from Settings.
 ///
 /// The app talks to undocumented Tieba endpoints whose response shapes are only
@@ -8,10 +41,14 @@ import Foundation
 /// layer records what it actually received and the user can hand the file back.
 ///
 /// Everything here is best-effort: recording must never throw and never block a
-/// network call, and the buffer is capped so a long session cannot grow without
-/// bound.
+/// network call, the buffer is capped so a long session cannot grow without
+/// bound, and the whole log can be switched off from Settings.
 actor AppLog {
     static let shared = AppLog()
+
+    /// Readable without awaiting the actor: a caller that would have to build an
+    /// expensive message first can skip the work instead of discarding it.
+    static var isEnabled: Bool { DiagnosticLogSettings().isEnabled }
 
     enum Level: String, Sendable {
         case info = "INFO"
@@ -38,6 +75,10 @@ actor AppLog {
         _ category: String,
         _ message: String
     ) {
+        // The switch is checked here rather than at each call site: a disabled
+        // log must record nothing at all, and the entry never exists to be
+        // exported or counted.
+        guard Self.isEnabled else { return }
         entries.append(
             Entry(
                 id: nextID,

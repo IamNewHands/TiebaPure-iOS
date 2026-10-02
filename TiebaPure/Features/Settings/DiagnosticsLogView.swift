@@ -9,6 +9,7 @@ import UIKit
 struct DiagnosticsLogView: View {
     @State private var entries: [AppLog.Entry] = []
     @State private var exportURL: URL?
+    @State private var isRecordingEnabled = true
 
     var body: some View {
         List {
@@ -43,12 +44,21 @@ struct DiagnosticsLogView: View {
             } header: {
                 Text("诊断")
             } footer: {
-                Text("只保存在本机内存，退出应用即清空。导出的内容已自动去掉 BDUSS、STOKEN、tbs 等凭据。")
+                Text(
+                    isRecordingEnabled
+                        ? "只保存在本机内存，退出应用即清空。导出的内容已自动去掉 BDUSS、STOKEN、tbs 等凭据。"
+                        : "记录已关闭，不会再有新内容。可在「设置 → 诊断」里重新开启；已记录的内容仍可导出或清空。"
+                )
+                .accessibilityIdentifier("diagnostics-recording-footer")
             }
 
             Section("最近记录") {
                 if entries.isEmpty {
-                    Text("暂无记录。回到首页或进吧刷新一次，再回来查看。")
+                    Text(
+                        isRecordingEnabled
+                            ? "暂无记录。回到首页或进吧刷新一次，再回来查看。"
+                            : "记录已关闭，所以这里是空的。"
+                    )
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("diagnostics-empty")
                 } else {
@@ -85,6 +95,7 @@ struct DiagnosticsLogView: View {
     }
 
     private func reload() async {
+        isRecordingEnabled = AppLog.isEnabled
         entries = await AppLog.shared.recent(200)
     }
 
