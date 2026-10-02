@@ -103,7 +103,14 @@ extension TiebaAPI {
                 group.addTask {
                     do {
                         return try await hotThreadsListing(account: account, tabCode: code)
+                    } catch is CancellationError {
+                        // The user switched tabs; a cancelled read is not a
+                        // category failure and must not be logged as one.
+                        return nil
                     } catch {
+                        if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                            return nil
+                        }
                         // One category failing still leaves a usable 全部 listing,
                         // but it must not disappear without a trace.
                         await AppLog.shared.recordError(
@@ -121,6 +128,9 @@ extension TiebaAPI {
             }
             return collected
         }
+        // A superseded load (another tab was tapped) must not report itself as a
+        // successful, smaller 全部 merge.
+        try Task.checkCancellation()
 
         let merged = HotFeedMerge.threads(from: [base] + feeds)
         await AppLog.shared.record(
@@ -177,6 +187,11 @@ extension TiebaAPI {
             )
             return feed
         } catch {
+            // Switching tabs cancels the in-flight read; that is not a failure
+            // and should not fill the log with errors.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled {
+                throw error
+            }
             await AppLog.shared.recordError(
                 "首页热点",
                 "tabCode=\(tabCode.isEmpty ? HotTab.allCode : tabCode) 失败",

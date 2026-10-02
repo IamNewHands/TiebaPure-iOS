@@ -170,6 +170,19 @@ struct HomeView: View {
                 .interactiveNavigationPopStateSync {
                     removeNavigationRouteIfCurrent(route)
                 }
+            case let .topic(id, name):
+                TopicDetailView(
+                    account: account,
+                    topicID: id,
+                    topicName: name,
+                    openThread: { openThread($0) },
+                    openComments: { openThread($0, initialDestination: .replies) },
+                    openForum: openForum,
+                    openUser: { openUser($0, sourceThreadID: nil) }
+                )
+                .interactiveNavigationPopStateSync {
+                    removeNavigationRouteIfCurrent(route)
+                }
             }
         }
         .interactiveNavigationPopRevealSource()
@@ -242,7 +255,8 @@ struct HomeView: View {
                 onOpenThread: { openThread($0) },
                 onOpenComments: { openThread($0, initialDestination: .replies) },
                 onOpenForum: openForum,
-                onOpenUser: { openUser($0, sourceThreadID: nil) }
+                onOpenUser: { openUser($0, sourceThreadID: nil) },
+                onOpenTopic: { openTopic($0) }
             )
             .accessibilityIdentifier("home-hot-feed")
         }
@@ -355,6 +369,13 @@ struct HomeView: View {
         RecentForumStore.shared.save(forum)
         navigationPath = HomeNavigationPathPolicy.pushing(
             .fromForum(forum),
+            onto: navigationPath
+        )
+    }
+
+    private func openTopic(_ topic: HotTopic) {
+        navigationPath = HomeNavigationPathPolicy.pushing(
+            .topic(id: topic.id, name: topic.name),
             onto: navigationPath
         )
     }
@@ -854,6 +875,7 @@ enum HomeNavigationRoute: Hashable {
     case thread(ReaderSplitThreadRoute)
     case forum(id: Int64, name: String, displayName: String, avatarURL: URL?)
     case user(user: UserSummary, sourceThreadID: Int64?)
+    case topic(id: Int64, name: String)
 
     static func fromForum(_ forum: Forum) -> HomeNavigationRoute {
         .forum(

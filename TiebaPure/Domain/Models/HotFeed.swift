@@ -20,11 +20,17 @@ struct HotTopic: Identifiable, Equatable, Sendable {
     /// 讨论数 as the service counts it.
     var discussCount: Int
 
-    /// The service counts into the millions, and the full number crowds out the
-    /// topic name next to it, so anything past ten thousand is rounded to 万.
-    var discussCountText: String {
-        guard discussCount >= 10_000 else { return "\(discussCount)" }
-        return String(format: "%.1f万", Double(discussCount) / 10_000)
+    var discussCountText: String { TiebaCountText.text(discussCount) }
+}
+
+/// The service counts 讨论数 and 浏览数 into the millions, and the full number
+/// crowds out whatever sits next to it, so anything past ten thousand is
+/// rounded to 万. One owner, because the hot list and the topic page show the
+/// same numbers.
+enum TiebaCountText {
+    static func text(_ count: Int) -> String {
+        guard count >= 10_000 else { return "\(count)" }
+        return String(format: "%.1f万", Double(count) / 10_000)
     }
 }
 

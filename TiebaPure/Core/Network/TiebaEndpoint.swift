@@ -15,6 +15,7 @@ enum TiebaEndpoint {
     case forumPageForm
     case personalized
     case hotThreadList
+    case topicDetail
     case frsPage
     case pbPage
     case pbFloor
@@ -71,6 +72,10 @@ enum TiebaEndpoint {
             return Self.base
                 .appending(path: "/c/f/forum/hotThreadList")
                 .appending(queryItems: [.init(name: "cmd", value: "309661")])
+        case .topicDetail:
+            // 话题详情: the web JSON endpoint behind one 话题榜 row. It pages by
+            // cursor (`last_id`), which is why the API layer carries one.
+            return Self.base.appending(path: "/mo/q/newtopic/topicDetail")
         case .frsPage:
             return Self.base
                 .appending(path: "/c/f/frs/page")
