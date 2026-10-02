@@ -144,8 +144,11 @@ enum DiagnosticRedaction {
         let withoutCookieSecrets = substitute(cookieSecretPattern, in: withoutJSONSecrets) { match, source in
             "\(captured(in: match, in: source))=\(placeholder)"
         }
-        return substitute(longBlobPattern, in: withoutCookieSecrets) { match, source in
-            "\(placeholder)(\(match.range(in: source).length) chars)"
+        return substitute(longBlobPattern, in: withoutCookieSecrets) { match, _ in
+            // `match.range(in:)` does not survive the Swift import of
+            // NSTextCheckingResult, whose `range` property shadows that method,
+            // so the length has to come off the property.
+            "\(placeholder)(\(match.range.length) chars)"
         }
     }
 
