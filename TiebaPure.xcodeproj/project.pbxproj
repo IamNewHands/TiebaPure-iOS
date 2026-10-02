@@ -29,6 +29,7 @@
 		1C53CA119B8A4874452D2F6B /* ContentDraftFilePersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE6592A34B15BF182198BFA /* ContentDraftFilePersistenceTests.swift */; };
 		1D73C1F9246A5740B5D63601 /* LogoutCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D6B235101269A6DE9BEB53A /* LogoutCoordinator.swift */; };
 		1E84B72ACDF13678A6BE6CB8 /* SavedThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB03A9A81B77E7ECBD00B30 /* SavedThread.swift */; };
+		20CF0955A1868EDA71C3FB81 /* TopicThreads.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18C7C93DD4135FB481FE96D /* TopicThreads.swift */; };
 		215E174D28331CD22F134EE6 /* TiebaAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06BFF7EDD31716056CE12B69 /* TiebaAPI.swift */; };
 		221CEAF5C48D697203C0FC6B /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 158DD0B24F8C6500639DB687 /* SwiftData.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		22C326EADD75278D51629E56 /* ReaderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431A697F330BBEC18E2252D0 /* ReaderCard.swift */; };
@@ -131,6 +132,7 @@
 		9C4E81261CE11986A7FC94CA /* PersistenceBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 481EB2A4D9C019B333364901 /* PersistenceBoundaryTests.swift */; };
 		9E782527D741226479B50A92 /* TiebaContentSubmissionAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C158046155BBD6748519CF /* TiebaContentSubmissionAPI.swift */; };
 		9FCC42B360A1683D6696808F /* ContentSubmissionSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A4C581F09C568D7DFC25D8 /* ContentSubmissionSettings.swift */; };
+		A27947A715E6615086B1DC6B /* TopicThreadsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80909CE4938DDC2C15B34363 /* TopicThreadsTests.swift */; };
 		A4FCD6601BAA005BF0F264D0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11227FF243EF6E0046E5C4A1 /* RootView.swift */; };
 		A5757E03976CA021ADE696FB /* Personalized.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6711EB46FB5BE95EF86ACB6 /* Personalized.pb.swift */; };
 		A6537596454795C265B252AD /* TiebaRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9A3625B3F19C2F07165809 /* TiebaRequestBuilder.swift */; };
@@ -141,6 +143,7 @@
 		A918F9AD31F8563BBA483DDE /* ThreadInfo.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2345ABFFDDC5D3B04B88A017 /* ThreadInfo.pb.swift */; };
 		A9A2CC0EE649F6C31E920713 /* TiebaFormSignerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A3703C41D45165012736BB /* TiebaFormSignerTests.swift */; };
 		AA3AF8E9A9956DD4FAEA8638 /* VideoInfo.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = B99D4BFCB0FC486AF2592D85 /* VideoInfo.pb.swift */; };
+		AB5FE601D32E24CB2CCE96DA /* TiebaTopicAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441B122C474BADCC01B55B09 /* TiebaTopicAPI.swift */; };
 		AC68D0057C4A48786599AB69 /* ContentFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B7B87BD4A9EB32A9F340FC /* ContentFilterTests.swift */; };
 		AC73C05F2AE82D15E3B429EB /* AlaLiveInfo.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F9E3067B91DE94BBC410176 /* AlaLiveInfo.pb.swift */; };
 		AC8C9EFD5E2B710919306D8B /* FileContentDraftPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77980DB0EC284A4F53AA4028 /* FileContentDraftPersistence.swift */; };
@@ -204,6 +207,7 @@
 		E209C76E1A8310E8F94F6A32 /* InlineTextReuseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D55E6E9D9C9BE0630B5C89 /* InlineTextReuseTests.swift */; };
 		E3CF1C9A62133316FF6D93E2 /* UserProfileMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65F7C671CDA66E5F18CEC24 /* UserProfileMapper.swift */; };
 		E4BC7D1B10FF88D762725986 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10E2287E1195B4261B0B88E8 /* SettingsView.swift */; };
+		E52701BA120B4F45F3016CDA /* TopicDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C64C8B87B07DA4103B1B7A /* TopicDetailView.swift */; };
 		E6FCA5689969E1EE7020CF44 /* ReadingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432F97822473B7D42DB148EC /* ReadingSettingsView.swift */; };
 		E8EBAA96255CA7A82C08DBD7 /* HotThreadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6798D74B94DFC3C6E8320452 /* HotThreadsView.swift */; };
 		EAADABB00751D25DB084C26D /* TiebaHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFF65BFE5160CFC6F1F12CEF /* TiebaHTTPClient.swift */; };
@@ -341,6 +345,7 @@
 		42BC57D4AB4F3F67B48877D9 /* ThreadFavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadFavoritesView.swift; sourceTree = "<group>"; };
 		431A697F330BBEC18E2252D0 /* ReaderCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderCard.swift; sourceTree = "<group>"; };
 		432F97822473B7D42DB148EC /* ReadingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSettingsView.swift; sourceTree = "<group>"; };
+		441B122C474BADCC01B55B09 /* TiebaTopicAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaTopicAPI.swift; sourceTree = "<group>"; };
 		44C549F603F6A8B5988B0B31 /* BrowsingHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowsingHistory.swift; sourceTree = "<group>"; };
 		460C7E1E4622409127D0F888 /* SavedThreadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedThreadTests.swift; sourceTree = "<group>"; };
 		475452DA26606C9EEF2982D2 /* ReaderStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStateView.swift; sourceTree = "<group>"; };
@@ -391,6 +396,7 @@
 		7E4CFA3390403419B8C3E890 /* ForumSignSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumSignSettings.swift; sourceTree = "<group>"; };
 		7F4A700D0BB079E5CEC104C1 /* FixtureDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureDecodingTests.swift; sourceTree = "<group>"; };
 		7F9A3625B3F19C2F07165809 /* TiebaRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaRequestBuilder.swift; sourceTree = "<group>"; };
+		80909CE4938DDC2C15B34363 /* TopicThreadsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicThreadsTests.swift; sourceTree = "<group>"; };
 		80C482CF17BA5520B13F1B03 /* AppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearance.swift; sourceTree = "<group>"; };
 		81C9E000B6A70DAE855C1F80 /* ThreadSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadSummary.swift; sourceTree = "<group>"; };
 		83A586DD3DD949672854FF9E /* ContentSubmissionNetworkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentSubmissionNetworkTests.swift; sourceTree = "<group>"; };
@@ -430,6 +436,7 @@
 		AF02A66EF1B9089518F9ED99 /* ImageViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewer.swift; sourceTree = "<group>"; };
 		AFF65BFE5160CFC6F1F12CEF /* TiebaHTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaHTTPClient.swift; sourceTree = "<group>"; };
 		B0B960AF4A983D18E1496538 /* SavedThreadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedThreadsView.swift; sourceTree = "<group>"; };
+		B0C64C8B87B07DA4103B1B7A /* TopicDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicDetailView.swift; sourceTree = "<group>"; };
 		B19C95736E6F6922D110E2A8 /* HotFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotFeed.swift; sourceTree = "<group>"; };
 		B3312A539F9532E1B21FD622 /* AppPosInfo.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPosInfo.pb.swift; sourceTree = "<group>"; };
 		B55649E6AEA1AD2EF4813452 /* TiebaUserProfileAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaUserProfileAPI.swift; sourceTree = "<group>"; };
@@ -444,6 +451,7 @@
 		BA707FB3466F64C9B7BB74F3 /* NavigationSourceLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationSourceLifecycleTests.swift; sourceTree = "<group>"; };
 		BC9BED7F7A1BE8C617FE2F15 /* TiebaEmoticonRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaEmoticonRepository.swift; sourceTree = "<group>"; };
 		C017341C9C78B3832CB8A72F /* PbContent.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PbContent.pb.swift; sourceTree = "<group>"; };
+		C18C7C93DD4135FB481FE96D /* TopicThreads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicThreads.swift; sourceTree = "<group>"; };
 		C25F6DDA828E44F9B5A0E5D9 /* TiebaPureTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaPureTheme.swift; sourceTree = "<group>"; };
 		C3B9F1DB7C284253E1A90DCA /* ContentSubmissionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentSubmissionCoordinatorTests.swift; sourceTree = "<group>"; };
 		C4B3F485FB45C4828FD7C5C6 /* AppPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPersistence.swift; sourceTree = "<group>"; };
@@ -543,6 +551,7 @@
 				5B099CE340C14B26B97B9E57 /* TiebaSocialAPI.swift */,
 				8FFB1A84AD3090A9581D1DA7 /* TiebaSubmissionChallenge.swift */,
 				8F256CCF10CED308966BFC23 /* TiebaThreadStoreAPI.swift */,
+				441B122C474BADCC01B55B09 /* TiebaTopicAPI.swift */,
 				B55649E6AEA1AD2EF4813452 /* TiebaUserProfileAPI.swift */,
 			);
 			path = Network;
@@ -640,6 +649,14 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		3D4B2E27E74D1D4BB018469F /* Topic */ = {
+			isa = PBXGroup;
+			children = (
+				B0C64C8B87B07DA4103B1B7A /* TopicDetailView.swift */,
+			);
+			path = Topic;
+			sourceTree = "<group>";
+		};
 		3E5E855F98820C90A36621B3 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -677,6 +694,7 @@
 				4EF25E73F880C6AD77740631 /* TiebaEmoticon.swift */,
 				BC9BED7F7A1BE8C617FE2F15 /* TiebaEmoticonRepository.swift */,
 				1E3321457BFA9611243ABF93 /* TiebaURL.swift */,
+				C18C7C93DD4135FB481FE96D /* TopicThreads.swift */,
 				6A68DE1DD356B7AC4AB669F8 /* UserProfile.swift */,
 			);
 			path = Models;
@@ -809,6 +827,7 @@
 				2792F6DFB423B6000542ADFB /* TiebaPostingBootstrapTests.swift */,
 				53A22DDA746D43724E44B7D2 /* TiebaPureSmokeTests.swift */,
 				9CE43843ABF0E6FE36F6A7BD /* TiebaURLTests.swift */,
+				80909CE4938DDC2C15B34363 /* TopicThreadsTests.swift */,
 				9F1C4599FA7188B0D810AE19 /* UserProfileMutationTests.swift */,
 				3A38AD5D710823BA66CAE23C /* UserProfileTests.swift */,
 				28FE6EA296C633FE6B2A0AD3 /* VideoAudioSessionTests.swift */,
@@ -1013,6 +1032,7 @@
 				D33EEBDA51E8F8D1D006E0FD /* Search */,
 				C1FC9133DCCA4B099E0A9997 /* Settings */,
 				458BAF838EC5BD818708339E /* Thread */,
+				3D4B2E27E74D1D4BB018469F /* Topic */,
 				AF9CB51DE2DE586FC3F27182 /* Voice */,
 			);
 			path = Features;
@@ -1305,8 +1325,11 @@
 				C7A32644A038BA4FDE2C2864 /* TiebaSocialAPI.swift in Sources */,
 				4AA30396C89848D6E874828A /* TiebaSubmissionChallenge.swift in Sources */,
 				32FB7209CF53027C77B378A7 /* TiebaThreadStoreAPI.swift in Sources */,
+				AB5FE601D32E24CB2CCE96DA /* TiebaTopicAPI.swift in Sources */,
 				61AC96A8DF8D9A6671239F30 /* TiebaURL.swift in Sources */,
 				66CB3F6B00C11572EF7276D1 /* TiebaUserProfileAPI.swift in Sources */,
+				E52701BA120B4F45F3016CDA /* TopicDetailView.swift in Sources */,
+				20CF0955A1868EDA71C3FB81 /* TopicThreads.swift in Sources */,
 				F2FE7D83BA305985F7A5600D /* User.pb.swift in Sources */,
 				C9381BB37A6F1CDB5053291B /* UserProfile.swift in Sources */,
 				E3CF1C9A62133316FF6D93E2 /* UserProfileMapper.swift in Sources */,
@@ -1371,6 +1394,7 @@
 				85EFBF3494B6DBAE4707E464 /* TiebaPostingBootstrapTests.swift in Sources */,
 				C0E5134C9E23DDD474D84DDA /* TiebaPureSmokeTests.swift in Sources */,
 				450F423517B8D1DEFD51B15B /* TiebaURLTests.swift in Sources */,
+				A27947A715E6615086B1DC6B /* TopicThreadsTests.swift in Sources */,
 				B673FC1D9439E3D10DF147C0 /* UserProfileMutationTests.swift in Sources */,
 				DE64CDA4FA60F57188F7BC53 /* UserProfileTests.swift in Sources */,
 				7ABBC168BCF747C297537AB6 /* VideoAudioSessionTests.swift in Sources */,
