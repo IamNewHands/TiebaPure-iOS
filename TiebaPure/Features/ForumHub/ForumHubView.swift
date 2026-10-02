@@ -168,9 +168,25 @@ struct ForumHubView: View {
                     Spacer(minLength: TiebaPureTheme.Spacing.sm)
                     if account != nil, visibleFollowedForums.isEmpty == false {
                         if signCoordinator.isRunning {
-                            ProgressView()
-                                .controlSize(.small)
-                                .accessibilityLabel("正在签到")
+                            HStack(spacing: TiebaPureTheme.Spacing.xs) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .accessibilityLabel("正在签到")
+                                if let progress = signCoordinator.progress {
+                                    Text(ForumSignProgressText.counter(for: progress))
+                                        .font(.footnote)
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityIdentifier("forum-hub-sign-progress")
+                                }
+                                Button("取消") {
+                                    signCoordinator.cancel()
+                                }
+                                .font(.footnote)
+                                .textCase(nil)
+                                .accessibilityLabel("取消签到")
+                                .accessibilityIdentifier("forum-hub-sign-cancel")
+                            }
                         } else {
                             Button("一键签到") {
                                 startSignAllFollowedForums()
@@ -181,6 +197,13 @@ struct ForumHubView: View {
                             .accessibilityIdentifier("forum-hub-sign-all")
                         }
                     }
+                }
+            } footer: {
+                if let progress = signCoordinator.progress,
+                   let currentForum = ForumSignProgressText.currentForum(for: progress) {
+                    Text(currentForum)
+                        .font(.footnote)
+                        .accessibilityIdentifier("forum-hub-sign-current-forum")
                 }
             }
         }

@@ -229,7 +229,7 @@ struct SettingsView: View {
         if let message = signStatusMessage {
             return message
         }
-        return "签到会按关注列表逐个请求，需要几秒到几十秒；同一天只会自动执行一次。"
+        return "今天已签到的贴吧会直接跳过，只对还没签的吧逐个请求；同一天只会自动执行一次。"
     }
 
     private var signStatusMessage: String? {

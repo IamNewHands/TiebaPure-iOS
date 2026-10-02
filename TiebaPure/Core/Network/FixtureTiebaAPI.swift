@@ -25,6 +25,7 @@ enum FixtureScenario: String {
     case forumCategoryRace
     case voicePlayback
     case signFailure
+    case signAlreadyDone
     case readingPosition
     case scrollPerformance
     case layoutPreview
@@ -594,6 +595,21 @@ struct FixtureTiebaAPI: TiebaAPIService {
             continuousDays: wasAlreadySigned ? 3 : 4,
             rank: 12
         )
+    }
+
+    /// The guide listing the check-in coordinator reads to skip forums that are
+    /// already signed today. Services without that listing reject the call, so
+    /// only the dedicated scenario answers it: the first forum is done for the
+    /// day, the second still needs a request.
+    func followedForumStatuses(account: Account) async throws -> [FollowedForumStatus] {
+        try await prepare()
+        guard scenario == .signAlreadyDone else {
+            throw UserProfileMutationError.unsupportedByService
+        }
+        return [
+            FollowedForumStatus(forumID: Self.forum.id, level: 7, isSignedToday: true),
+            FollowedForumStatus(forumID: Self.forumTwo.id, level: 3, isSignedToday: false)
+        ]
     }
 
     func accountThreadFavorites(account: Account, page: Int) async throws -> AccountThreadFavoritesPage {
