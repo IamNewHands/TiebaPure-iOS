@@ -3193,6 +3193,40 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertFalse(HomeFeedSwipePolicy.isHorizontalSwipe(translation: .zero))
     }
 
+    func testHotFeedLoadsOnItsFirstActivationOnly() {
+        // First switch to 热点 must load its listing…
+        XCTAssertTrue(HotFeedLoadPolicy.shouldLoadOnActivation(
+            isActive: true,
+            didLoad: false
+        ))
+        // …and swiping to 推荐 and back must reuse it instead of re-fetching.
+        XCTAssertFalse(HotFeedLoadPolicy.shouldLoadOnActivation(
+            isActive: true,
+            didLoad: true
+        ))
+        // The hidden segment never loads in the background.
+        XCTAssertFalse(HotFeedLoadPolicy.shouldLoadOnActivation(
+            isActive: false,
+            didLoad: false
+        ))
+        XCTAssertFalse(HotFeedLoadPolicy.shouldLoadOnActivation(
+            isActive: false,
+            didLoad: true
+        ))
+    }
+
+    func testHomeTabGesturesAddressTheVisibleSegmentOnly() {
+        let recommended = HomeFeedGestureTargetPolicy.targets(
+            forActiveSegment: .recommended
+        )
+        XCTAssertEqual(recommended.scrollToTopSegment, .recommended)
+        XCTAssertEqual(recommended.refreshSegment, .recommended)
+
+        let hot = HomeFeedGestureTargetPolicy.targets(forActiveSegment: .hot)
+        XCTAssertEqual(hot.scrollToTopSegment, .hot)
+        XCTAssertEqual(hot.refreshSegment, .hot)
+    }
+
     func testRootTabHitTesterMapsBottomTabRegions() {
         let centeredIPadFrames = [
             CGRect(x: 280, y: 0, width: 80, height: 49),
