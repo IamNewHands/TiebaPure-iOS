@@ -43,8 +43,10 @@ struct HotThreadsView: View {
     let onOpenComments: (ThreadSummary) -> Void
     let onOpenForum: (Forum) -> Void
     let onOpenUser: (UserSummary) -> Void
+    let onOpenTopic: (HotTopic) -> Void
 
     @State private var tabs: [HotTab] = []
+    @State private var topics: [HotTopic] = []
     @State private var selectedTabCode = HotTab.allCode
     @State private var threads: [ThreadSummary] = []
     @State private var isLoading = false
@@ -71,6 +73,7 @@ struct HotThreadsView: View {
             requestGeneration += 1
             loadTask?.cancel()
             tabs = []
+            topics = []
             selectedTabCode = HotTab.allCode
             threads = []
             errorMessage = nil
@@ -113,6 +116,77 @@ struct HotThreadsView: View {
         .background(TiebaPureTheme.ColorToken.readerGroupedBackground)
     }
 
+    /// 话题榜: the service sends the same hot topics with every listing, and the
+    /// official page shows them above the threads. Tapping one opens its feed.
+    private var hotTopicSection: some View {
+        VStack(alignment: .leading, spacing: TiebaPureTheme.Spacing.xs) {
+            Text("热议话题")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
+                Button {
+                    onOpenTopic(topic)
+                } label: {
+                    hotTopicRow(topic, rank: index)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("第\(index + 1)名 \(topic.name)，\(topic.discussCountText)讨论")
+                .accessibilityHint("查看该话题的帖子")
+                .accessibilityIdentifier("hot-topic-row")
+            }
+        }
+        .padding(TiebaPureTheme.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: TiebaPureTheme.Radius.card, style: .continuous)
+                .fill(TiebaPureTheme.ColorToken.readerSecondarySurface)
+        )
+        .accessibilityIdentifier("hot-topic-section")
+    }
+
+    private func hotTopicRow(_ topic: HotTopic, rank: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: TiebaPureTheme.Spacing.sm) {
+            Text("\(rank + 1)")
+                .font(.footnote.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(topicRankColor(rank))
+                .frame(minWidth: 18, alignment: .trailing)
+
+            Text(topic.name)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+
+            Spacer(minLength: TiebaPureTheme.Spacing.xs)
+
+            Text(topic.discussCountText)
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .frame(minHeight: 32)
+    }
+
+    /// The first three ranks carry the service's own red/orange/yellow accents.
+    private func topicRankColor(_ index: Int) -> Color {
+        switch index {
+        case 0:
+            return Color(red: 0.84, green: 0.0, blue: 0.0)
+        case 1:
+            return Color(red: 1.0, green: 0.43, blue: 0.0)
+        case 2:
+            return Color(red: 0.98, green: 0.75, blue: 0.18)
+        default:
+            return .secondary
+        }
+    }
+
     @ViewBuilder
     private var feedContent: some View {
         if isLoading && didLoad == false {
@@ -133,6 +207,10 @@ struct HotThreadsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: TiebaPureTheme.Spacing.sm, pinnedViews: []) {
+                    if topics.isEmpty == false {
+                        hotTopicSection
+                    }
+
                     ForEach(threads) { thread in
                         ForumThreadRow(
                             thread: thread,
@@ -225,6 +303,7 @@ struct HotThreadsView: View {
             guard generation == requestGeneration,
                   requestedSession == account?.sessionIdentity else { return }
             tabs = feed.tabs
+            topics = feed.topics
             threads = feed.threads.filter(TiebaContentFilter.shouldKeep(thread:))
             // A sub-tab the service stopped reporting must not leave the tab bar
             // pointing at a listing that can no longer be requested. 全部 is
