@@ -305,6 +305,100 @@ final class HotThreadListTests: XCTestCase {
         XCTAssertEqual(feed.threads.map(\.id), [9001, 9002])
     }
 
+    func testTopicWireBytesDecodeIDNameAndDiscussCount() throws {
+        // topic_id(1) 28366254, topic_name(2) 假期打分大会, discuss_num(4) 1641000
+        let wire = try XCTUnwrap(Self.data(hex: "08aeabc30d1212e58187e69c9fe68993e58886e5a4a7e4bc9a20a89464"))
+
+        let topic = try Tieba_HotThreadList_RecomTopicList(serializedBytes: wire)
+
+        XCTAssertEqual(topic.topicID, 28_366_254)
+        XCTAssertEqual(topic.topicName, "假期打分大会")
+        XCTAssertEqual(topic.discussNum, 1_641_000)
+    }
+
+    func testTopicListMapsInServiceOrderAndSkipsIncompleteRows() {
+        var responseData = Tieba_HotThreadList_HotThreadListResponseData()
+
+        var usable = Tieba_HotThreadList_RecomTopicList()
+        usable.topicID = 28_366_254
+        usable.topicName = "假期打分大会"
+        usable.discussNum = 1_641_000
+        var withoutName = Tieba_HotThreadList_RecomTopicList()
+        withoutName.topicID = 28_366_253
+        var withoutID = Tieba_HotThreadList_RecomTopicList()
+        withoutID.topicName = "没有 id 的话题"
+        responseData.topicList = [usable, withoutName, withoutID]
+
+        let feed = HotFeedMapper.makeFeed(from: responseData)
+
+        XCTAssertEqual(
+            feed.topics,
+            [HotTopic(id: 28_366_254, name: "假期打分大会", discussCount: 1_641_000)],
+            "无 id 或无名字的话题行直接丢掉，其余保持服务端顺序"
+        )
+    }
+
+    func testTopicDiscussCountUsesWanPastTenThousand() {
+        func text(_ count: Int) -> String {
+            HotTopic(id: 1, name: "话题", discussCount: count).discussCountText
+        }
+
+        XCTAssertEqual(text(0), "0")
+        XCTAssertEqual(text(9_999), "9999")
+        XCTAssertEqual(text(10_000), "1.0万")
+        XCTAssertEqual(text(1_641_000), "164.1万")
+    }
+
+    func testMergedAllListingUnionsCategoriesAndOrdersByHeat() {
+        let merged = HotFeedMerge.threads(from: [
+            hotFeed(threads: [hotThread(id: 1, hot: 100), hotThread(id: 2, hot: 300)]),
+            hotFeed(threads: [hotThread(id: 3, hot: 200)])
+        ])
+
+        XCTAssertEqual(merged.map(\.id), [2, 3, 1])
+    }
+
+    func testMergedAllListingKeepsTheHottestCopyOfADuplicate() {
+        let merged = HotFeedMerge.threads(from: [
+            hotFeed(threads: [hotThread(id: 7, hot: 10)]),
+            hotFeed(threads: [hotThread(id: 7, hot: 90)])
+        ])
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].hotScore, 90)
+    }
+
+    func testMergedAllListingBreaksEqualHeatByReplyCount() {
+        let merged = HotFeedMerge.threads(from: [
+            hotFeed(threads: [
+                hotThread(id: 4, hot: 0, replies: 3),
+                hotThread(id: 5, hot: 0, replies: 9)
+            ])
+        ])
+
+        XCTAssertEqual(merged.map(\.id), [5, 4])
+    }
+
+    func testMergedAllListingOfNoFeedsIsEmpty() {
+        XCTAssertTrue(HotFeedMerge.threads(from: []).isEmpty)
+    }
+
+    private func hotFeed(threads: [ThreadSummary]) -> HotFeed {
+        HotFeed(threads: threads)
+    }
+
+    private func hotThread(id: Int64, hot: Int64, replies: Int = 0) -> ThreadSummary {
+        ThreadSummary(
+            id: id,
+            title: "帖子\(id)",
+            author: UserSummary(id: 1, name: "author", displayName: "作者", portrait: ""),
+            replyCount: replies,
+            viewCount: 0,
+            blocks: [],
+            hotValue: hot == 0 ? nil : hot
+        )
+    }
+
     func testSegmentsExposeStableTitlesAndHints() {
         XCTAssertEqual(HomeFeedSegment.allCases.map(\.title), ["推荐", "热点"])
         XCTAssertEqual(HomeFeedSegment.recommended.accessibilityHint, "显示个性化推荐的帖子")

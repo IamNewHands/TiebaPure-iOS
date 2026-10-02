@@ -5,10 +5,9 @@ enum TiebaHotRequestFactory {
     /// variable part. The tab list itself comes back on every response, so the
     /// first request needs no discovery round.
     ///
-    /// An empty code is not a usable "default": the service answers it with a
-    /// stub of a handful of threads, while `tab_code="all"` is the whole hot
-    /// list. The view therefore asks for `HotTab.allCode` and this mapping only
-    /// keeps an empty caller from reproducing the stub.
+    /// An empty code folds into `HotTab.allCode`, so no caller can send a
+    /// code-less request: it and "all" answer with the same 4-thread default,
+    /// which the API layer turns into the merged 全部 listing.
     static func request(
         account: Account?,
         tabCode: String,
@@ -44,12 +43,28 @@ enum HotFeedMapper {
         }
         return HotFeed(
             tabs: tabs,
+            topics: topics(in: data),
             threads: dedupedByID(
                 data.threadInfo
                     .filter(TiebaContentFilter.shouldMap(thread:))
                     .map { ThreadMapper.fromThreadInfo($0, usersByID: [:]) }
             )
         )
+    }
+
+    /// 话题榜 rows. A topic without an id or a name has nothing to render and
+    /// nothing to identify it by.
+    private static func topics(
+        in data: Tieba_HotThreadList_HotThreadListResponseData
+    ) -> [HotTopic] {
+        data.topicList.compactMap { topic -> HotTopic? in
+            guard topic.topicID > 0, topic.topicName.isEmpty == false else { return nil }
+            return HotTopic(
+                id: Int64(clamping: topic.topicID),
+                name: topic.topicName,
+                discussCount: Int(clamping: topic.discussNum)
+            )
+        }
     }
 
     /// The same thread can appear twice in one listing (a pinned row repeated at
@@ -63,10 +78,64 @@ enum HotFeedMapper {
 extension TiebaAPI {
     /// 热点 (hot threads) for one sub-tab of the home hot-thread tab.
     ///
-    /// An empty `tabCode` is resolved to `HotTab.allCode`, so every request
-    /// names a real listing. Threads are filtered and mapped exactly like the
+    /// The service has no whole-list code, so `HotTab.allCode` is assembled from
+    /// the category listings instead of being one request; every other code is
+    /// exactly one. Threads are filtered and mapped exactly like the
     /// personalized feed so both tabs share one row presentation.
     func hotThreads(account: Account?, tabCode: String) async throws -> HotFeed {
+        guard tabCode.isEmpty || tabCode == HotTab.allCode else {
+            return try await hotThreadsListing(account: account, tabCode: tabCode)
+        }
+        return try await allHotThreads(account: account)
+    }
+
+    /// 全部: the service's default listing (its rows, the tab list and the
+    /// 话题榜) plus every category listing merged into one 热度-ordered list.
+    private func allHotThreads(account: Account?) async throws -> HotFeed {
+        let base = try await hotThreadsListing(account: account, tabCode: HotTab.allCode)
+        let categoryCodes = base.tabs.map(\.code).filter { $0 != HotTab.allCode }
+        guard categoryCodes.isEmpty == false else { return base }
+
+        // The categories are independent reads, so they run at once: the 全部
+        // listing is the first thing the tab shows.
+        let feeds = await withTaskGroup(of: HotFeed?.self) { group in
+            for code in categoryCodes {
+                group.addTask {
+                    do {
+                        return try await hotThreadsListing(account: account, tabCode: code)
+                    } catch {
+                        // One category failing still leaves a usable 全部 listing,
+                        // but it must not disappear without a trace.
+                        await AppLog.shared.recordError(
+                            "首页热点",
+                            "全部合并：\(code) 拉取失败，本次只用其余分类",
+                            error: error
+                        )
+                        return nil
+                    }
+                }
+            }
+            var collected: [HotFeed] = []
+            for await feed in group {
+                if let feed { collected.append(feed) }
+            }
+            return collected
+        }
+
+        let merged = HotFeedMerge.threads(from: [base] + feeds)
+        await AppLog.shared.record(
+            .info,
+            "首页热点",
+            "全部合并 \(categoryCodes.count) 个分类：默认 \(base.threads.count) 条 + 分类 "
+                + "\(feeds.reduce(0) { $0 + $1.threads.count }) 条 → 去重后 \(merged.count) 条 "
+                + "话题\(base.topics.count)条"
+        )
+        return HotFeed(tabs: base.tabs, topics: base.topics, threads: merged)
+    }
+
+    /// One listing from one request, with the diagnostic line that separates
+    /// "the service sent four threads" from "we filtered them".
+    private func hotThreadsListing(account: Account?, tabCode: String) async throws -> HotFeed {
         let request = TiebaHotRequestFactory.request(
             account: account,
             tabCode: tabCode,
@@ -93,8 +162,7 @@ extension TiebaAPI {
             guard response.hasData else { throw TiebaAPIError.emptyResponse }
             let feed = HotFeedMapper.makeFeed(from: response.data)
             // The service's own tab list (with codes) is what decides whether a
-            // missing 全部 is a server change or a local one, and the raw count
-            // separates "the service sent four threads" from "we filtered them".
+            // missing 全部 is a server change or a local one.
             let serverTabs = response.data.hotThreadTabInfo
                 .map { "\($0.tabName)(\($0.tabCode))" }
                 .joined(separator: "/")
