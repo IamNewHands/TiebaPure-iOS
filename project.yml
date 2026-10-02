@@ -37,7 +37,7 @@ targets:
         INFOPLIST_FILE: TiebaPure/Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: 1.4.14
-        CURRENT_PROJECT_VERSION: 66
+        CURRENT_PROJECT_VERSION: 67
   TiebaPureOpenIn:
     type: app-extension
     platform: iOS
@@ -57,7 +57,7 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
         MARKETING_VERSION: 1.4.14
-        CURRENT_PROJECT_VERSION: 66
+        CURRENT_PROJECT_VERSION: 67
   TiebaPureTests:
     type: bundle.unit-test
     platform: iOS
