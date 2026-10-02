@@ -102,15 +102,32 @@ final class ForumSignCoordinator: ObservableObject {
                 // One write token for the whole run: the login handshake that
                 // produces it costs more than the check-in write itself, and
                 // doing it per forum is what made a long list feel stuck.
+                //
+                // It is also the single most expensive step of the run, so a
+                // run with nothing to write must not pay for it: with every
+                // forum already signed the loop below is empty, and resolving
+                // the token anyway turned "nothing to do" into a spinner that
+                // sat there for the whole handshake.
+                let tbs: String
                 stepStarted = Date()
-                let tbs = (try? await api.signingTBS(account: account)) ?? ""
-                try Task.checkCancellation()
-                await AppLog.shared.record(
-                    .info,
-                    "一键签到",
-                    "写令牌\(tbs.isEmpty ? "未取到，逐吧解析" : "已就绪，本轮回用")，"
-                        + "耗时 \(Self.seconds(Date().timeIntervalSince(stepStarted)))"
-                )
+                if pending.isEmpty {
+                    tbs = ""
+                    await AppLog.shared.record(
+                        .info,
+                        "一键签到",
+                        "无待签贴吧，跳过写令牌解析，耗时 "
+                            + "\(Self.seconds(Date().timeIntervalSince(stepStarted)))"
+                    )
+                } else {
+                    tbs = (try? await api.signingTBS(account: account)) ?? ""
+                    try Task.checkCancellation()
+                    await AppLog.shared.record(
+                        .info,
+                        "一键签到",
+                        "写令牌\(tbs.isEmpty ? "未取到，逐吧解析" : "已就绪，本轮回用")，"
+                            + "耗时 \(Self.seconds(Date().timeIntervalSince(stepStarted)))"
+                    )
+                }
 
                 let signingStarted = Date()
                 for (index, forum) in pending.enumerated() {

@@ -268,6 +268,51 @@ final class ForumSignTests: XCTestCase {
     }
 
     @MainActor
+    func testRunWithNothingToSignDoesNotResolveAWriteToken() async throws {
+        let defaults = try makeScratchDefaults()
+        let settings = ForumSignSettingsStore(defaults: defaults)
+        let api = FixtureTiebaAPI(scenario: .signAllDone)
+        let coordinator = ForumSignCoordinator(
+            api: api,
+            settings: settings,
+            requestSpacing: .zero
+        )
+
+        let summary = await coordinator.signAllFollowedForums(account: account)
+        let tokenRequests = await api.signingTBSRequestCount()
+
+        XCTAssertEqual(summary.signedCount, 0)
+        XCTAssertEqual(summary.alreadySignedCount, 2, "两个吧都已签到，整轮没有写请求")
+        XCTAssertTrue(summary.failedForumNames.isEmpty)
+        XCTAssertEqual(
+            tokenRequests,
+            0,
+            "没有待签贴吧时不应解析写令牌：那一步是登录握手，会让「无需签到」也卡住整轮"
+        )
+        XCTAssertTrue(
+            settings.hasRunToday(accountID: account.id),
+            "全部已签到时也算今天跑过，否则明天之前会反复自动重试"
+        )
+    }
+
+    @MainActor
+    func testRunResolvesTheWriteTokenOnceForTheWholeList() async throws {
+        let defaults = try makeScratchDefaults()
+        let api = FixtureTiebaAPI(scenario: .success)
+        let coordinator = ForumSignCoordinator(
+            api: api,
+            settings: ForumSignSettingsStore(defaults: defaults),
+            requestSpacing: .zero
+        )
+
+        let summary = await coordinator.signAllFollowedForums(account: account)
+        let tokenRequests = await api.signingTBSRequestCount()
+
+        XCTAssertEqual(summary.signedCount, 2)
+        XCTAssertEqual(tokenRequests, 1, "整轮只应握手一次，而不是每个吧一次")
+    }
+
+    @MainActor
     func testRunPublishesProgressWhileSigningAndClearsItAfterwards() async throws {
         let defaults = try makeScratchDefaults()
         let coordinator = ForumSignCoordinator(

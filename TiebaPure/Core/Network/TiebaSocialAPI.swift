@@ -532,6 +532,7 @@ extension TiebaAPI {
     ) async throws -> String {
         var clientError: Error?
         var webError: Error?
+        let clientAttemptStarted = Date()
 
         do {
             let response = try await login(
@@ -539,6 +540,7 @@ extension TiebaAPI {
                 stoken: account.stoken,
                 baiduID: account.baiduID ?? ""
             )
+            await logSlowTokenHop("客户端登录", startedAt: clientAttemptStarted)
             try Task.checkCancellation()
             let code = Int(response.errorCode ?? "0") ?? 0
             if code == 0 {
@@ -562,17 +564,20 @@ extension TiebaAPI {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            await logSlowTokenHop("客户端登录", startedAt: clientAttemptStarted, failure: error)
             clientError = error
         }
 
         try Task.checkCancellation()
 
+        let webAttemptStarted = Date()
         do {
             let webInfo = try await webMyInfo(cookies: BaiduCookies(
                 bduss: account.bduss,
                 stoken: account.stoken,
                 baiduID: account.baiduID
             ))
+            await logSlowTokenHop("网页兜底", startedAt: webAttemptStarted)
             try Task.checkCancellation()
 
             if webInfo.data?.isLogin == false {
@@ -594,11 +599,13 @@ extension TiebaAPI {
         } catch is CancellationError {
             throw CancellationError()
         } catch let apiError as TiebaAPIError {
+            await logSlowTokenHop("网页兜底", startedAt: webAttemptStarted, failure: apiError)
             if case .sessionExpired = apiError {
                 throw apiError
             }
             webError = apiError
         } catch {
+            await logSlowTokenHop("网页兜底", startedAt: webAttemptStarted, failure: error)
             webError = error
         }
 
@@ -616,6 +623,26 @@ extension TiebaAPI {
         }
         throw TiebaMutationError.missingTBS
     }
+
+    /// A write token normally resolves in a few hundred milliseconds, but each
+    /// of the two hops behind it can stall on its own, and a twenty-second
+    /// check-in cannot be told from a slow write without knowing which hop ate
+    /// the time. Only the slow hops are recorded, so a like or a collection
+    /// does not add a line per tap.
+    private func logSlowTokenHop(
+        _ name: String,
+        startedAt: Date,
+        failure: Error? = nil
+    ) async {
+        let seconds = Date().timeIntervalSince(startedAt)
+        guard seconds >= Self.slowTokenHopSeconds else { return }
+        let cost = String(format: "%.1fs", seconds)
+        let outcome = failure.map { "失败：\(ReaderErrorMessage.message(for: $0))" } ?? "成功"
+        await AppLog.shared.record(.warning, "写令牌", "\(name) 耗时 \(cost) \(outcome)")
+    }
+
+    /// Below this a hop is fast enough not to be worth a log line.
+    private static let slowTokenHopSeconds: TimeInterval = 3
 
     func setPostLiked(
         account: Account,
