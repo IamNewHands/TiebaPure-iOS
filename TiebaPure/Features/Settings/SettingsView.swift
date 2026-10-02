@@ -94,6 +94,20 @@ struct SettingsView: View {
                 Text("发帖和回帖使用非官方实验接口。开启并使用后，可能触发贴吧风控，造成内容被隐藏或删除、账号功能受限；极端情况下账号可能被冻结。请确认能够承担风险后再使用。关闭点赞后仍会显示点赞数量；设置和屏蔽规则仅保存在本机。")
             }
 
+            Section {
+                NavigationLink {
+                    DiagnosticsLogView()
+                } label: {
+                    Label("诊断日志", systemImage: "doc.text.magnifyingglass")
+                }
+                .accessibilityHint("查看并导出首页推荐、热点和进吧等级的接口返回记录")
+                .accessibilityIdentifier("settings-diagnostics-entry")
+            } header: {
+                Text("诊断")
+            } footer: {
+                Text("记录首页和进吧相关接口的返回情况，用于排查「内容不对」或「等级不显示」的问题。日志只保存在本机内存，退出应用即清空。")
+            }
+
             if let account {
                 Section {
                     Toggle(isOn: automaticSignSelection) {

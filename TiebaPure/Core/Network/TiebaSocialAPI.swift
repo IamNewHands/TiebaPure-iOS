@@ -425,21 +425,50 @@ extension TiebaAPI {
             try TiebaResponseValidator.validate(code: response.errorCode, message: response.errorMessage)
             guard let data = response.data else { throw TiebaAPIError.emptyResponse }
 
-            statuses.append(contentsOf: data.forums.compactMap { forum in
+            let decoded = data.forums.compactMap { forum -> FollowedForumStatus? in
                 guard forum.forumID > 0 else { return nil }
                 return FollowedForumStatus(
                     forumID: forum.forumID,
                     level: max(forum.level, 0),
                     isSignedToday: forum.isSignedToday
                 )
-            })
+            }
+
+            await AppLog.shared.record(
+                .info,
+                "进吧等级",
+                "第\(page)页 error_code=\(response.errorCode) has_more=\(data.hasMore) "
+                    + "原始\(data.forums.count)条 有效\(decoded.count)条 "
+                    + "等级分布=\(Self.levelHistogram(decoded))"
+            )
+
+            statuses.append(contentsOf: decoded)
 
             // An empty page with a sticky "has more" flag would otherwise spin.
             guard data.hasMore, data.forums.isEmpty == false else { break }
             page += 1
         }
 
+        await AppLog.shared.record(
+            .info,
+            "进吧等级",
+            "汇总 \(statuses.count) 个贴吧，等级>0 的 \(statuses.filter { $0.level > 0 }.count) 个，"
+                + "已签到 \(statuses.filter(\.isSignedToday).count) 个"
+        )
         return statuses
+    }
+
+    /// Level values that never arrive are the difference between "not signed in"
+    /// and "wrong field name", and a histogram shows both at a glance.
+    private static func levelHistogram(_ statuses: [FollowedForumStatus]) -> String {
+        var buckets: [Int: Int] = [:]
+        for status in statuses {
+            buckets[status.level, default: 0] += 1
+        }
+        return buckets
+            .sorted { $0.key < $1.key }
+            .map { "Lv\($0.key)×\($0.value)" }
+            .joined(separator: " ")
     }
 
     private func followedForumGuidePage(
@@ -451,15 +480,31 @@ extension TiebaAPI {
             tbs: tbs,
             page: page
         )
-        return try await client.postForm(
+        let data = try await client.postFormData(
             .followedForumGuide,
             fields: fields,
             headers: [
                 "Cookie": account.minimalCookieHeader,
                 "Subapp-Type": "hybrid"
-            ],
-            as: FollowedForumGuideResponseDTO.self
+            ]
         )
+
+        // The guide payload is the least documented response in the app: the
+        // forum list key, the level key and the check-in key all come from
+        // observation, so the raw skeleton is recorded before decoding rather
+        // than after, where a mismatch would already be a silent empty list.
+        await AppLog.shared.record(
+            .info,
+            "进吧等级",
+            "第\(page)页 原始\(data.count)字节 结构=\(DiagnosticJSON.skeleton(data))"
+        )
+
+        do {
+            return try JSONDecoder().decode(FollowedForumGuideResponseDTO.self, from: data)
+        } catch {
+            await AppLog.shared.recordError("进吧等级", "第\(page)页解码失败", error: error)
+            throw error
+        }
     }
 
     /// Reading the guide needs a valid TBS, but a login normally stores one:
