@@ -4015,6 +4015,44 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertEqual(linkedUser.displayNameResolved, "被回复用户")
     }
 
+    func testInlineSubpostMediaCollapsesToBracketedPlaceholder() {
+        let image = ImageContent(
+            thumbnailURL: URL(string: "https://tiebac.baidu.com/forum/w%3D580/sign=abc.jpg"),
+            originalURL: nil,
+            width: 800,
+            height: 600,
+            showOriginalButton: false
+        )
+        let video = VideoContent(
+            videoURL: nil,
+            coverURL: nil,
+            webURL: nil,
+            width: 0,
+            height: 0,
+            duration: 0
+        )
+        let prefix = [InlineContentText.PrefixPart.text("作者: ")]
+
+        // The 楼中楼 preview renders through the inline text path, which has no
+        // media view of its own: an image-only reply used to read as a blank
+        // line under the author prefix.
+        let imageOnly = InlineContentText(
+            blocks: [.image(image)],
+            style: .subpost,
+            prefixParts: prefix
+        )
+        XCTAssertEqual(imageOnly.attributedString().string, "作者: [图片]")
+        XCTAssertEqual(imageOnly.accessibilityText(), "作者: [图片]")
+
+        let mixed = InlineContentText(
+            blocks: [.image(image), .text("配图说明"), .video(video)],
+            style: .subpost,
+            prefixParts: prefix
+        )
+        XCTAssertEqual(mixed.attributedString().string, "作者: [图片]配图说明[视频]")
+        XCTAssertEqual(mixed.accessibilityText(), "作者: [图片]配图说明[视频]")
+    }
+
     func testReferenceSubpostFixtureExercisesMissingUserTypeZeroPayload() throws {
         let first = try XCTUnwrap(FixtureTiebaAPI.referenceSubpostFixtures.first)
 
