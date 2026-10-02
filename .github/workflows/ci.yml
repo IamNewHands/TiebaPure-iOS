@@ -19,6 +19,45 @@ env:
   DERIVED_DATA: /tmp/TiebaPureDerivedData
 
 jobs:
+  # Fast compile-only feedback. The test lanes below cannot report a syntax
+  # error until after they boot a simulator (~3 min) and build the whole app,
+  # so a plain type error costs 7+ minutes before it is visible. This lane
+  # skips the simulator and the test run entirely: `build-for-testing` compiles
+  # the app plus both test bundles against a generic destination and stops
+  # there, so compile errors surface in roughly half the time. It runs in
+  # parallel with the test lanes rather than gating them, so the wall-clock cost
+  # of a green run is zero.
+  build-only:
+    name: Compile check
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Restore DerivedData cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DERIVED_DATA }}
+          key: tieba-deriveddata-${{ runner.os }}-${{ hashFiles('project.yml', 'TiebaPure.xcodeproj/**', 'TiebaPure/**', 'TiebaPureTests/**', 'TiebaPureUITests/**') }}
+          restore-keys: |
+            tieba-deriveddata-${{ runner.os }}-
+
+      - name: Compile app and test bundles
+        run: |
+          xcodebuild -project TiebaPure.xcodeproj -scheme TiebaPure \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            -parallelizeTargets \
+            build-for-testing
+
+      - name: Report compiled products
+        run: |
+          products="$DERIVED_DATA/Build/Products/Debug-iphonesimulator"
+          test -d "$products/TiebaPure.app"
+          test -d "$products/TiebaPureTests.xctest"
+          ls -1 "$products" | head -20
+
   # Unit tests run independently from UI / release work so each lane can run
   # on its own runner in parallel. DerivedData is cached across runs (and
   # reused between lanes via a prefix restore key) so unchanged modules are
@@ -238,11 +277,11 @@ jobs:
               --title "$TITLE" --notes "$NOTES"
           fi
 
-  # Keep one stable check name (branch protection compatibility) that only
-  # depends on the always-on test lanes.
+  # Keep one stable check name (branch protection compatibility) that depends on
+  # every always-on lane.
   ci-ok:
     name: ci-ok
-    needs: [unit-tests, ui-tests-iphone, ui-tests-ipad]
+    needs: [build-only, unit-tests, ui-tests-iphone, ui-tests-ipad]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All required checks passed."
