@@ -35,6 +35,7 @@ struct ContentBlocksView: View {
     var readerLineSpacing: ReaderLineSpacing = .standard
     var inlineAccessibilityIdentifier: String?
     var onOpenUser: ((UserSummary) -> Void)?
+    var onOpenTiebaRoute: ((ExternalRoute) -> Void)?
     var onPlainTextTap: (() -> Void)?
 
     var body: some View {
@@ -57,6 +58,7 @@ struct ContentBlocksView: View {
                             allowsTextSelection: true,
                             accessibilityIdentifier: inlineAccessibilityIdentifier,
                             onOpenUser: onOpenUser,
+                            onOpenTiebaRoute: onOpenTiebaRoute,
                             onPlainTextTap: onPlainTextTap
                         )
                         .fixedSize(horizontal: false, vertical: true)
@@ -96,6 +98,7 @@ struct ContentBlocksView: View {
                             ),
                             accessibilityIdentifier: inlineAccessibilityIdentifier,
                             onOpenUser: onOpenUser,
+                            onOpenTiebaRoute: onOpenTiebaRoute,
                             onPlainTextTap: onPlainTextTap
                         )
                         .fixedSize(horizontal: false, vertical: true)
@@ -967,6 +970,18 @@ enum InlineContentTextMeasurementCache {
     }
 }
 
+/// Inline text runs have no room for a media view of their own. The 楼中楼
+/// preview renders its replies through `InlineContentText` (the full sheet uses
+/// `ContentBlocksView` and draws the real artwork), so an image or video block
+/// that is silently skipped leaves an image-only reply reading as a blank line
+/// under the author prefix. Media therefore collapses to a bracketed
+/// placeholder, matching the long-standing "[语音]" treatment.
+enum InlineMediaPlaceholder {
+    static let image = "[图片]"
+    static let video = "[视频]"
+    static let voice = "[语音]"
+}
+
 struct InlineContentText: UIViewRepresentable {
     enum PrefixPart: Equatable {
         case text(String)
@@ -1069,6 +1084,10 @@ struct InlineContentText: UIViewRepresentable {
     var allowsTextSelection = false
     var accessibilityIdentifier: String?
     var onOpenUser: ((UserSummary) -> Void)?
+    /// Routes a tapped tieba.baidu.com link into the reader instead of handing
+    /// it to Safari or the official client. Nil keeps the external hand-off for
+    /// surfaces that cannot present an in-app destination.
+    var onOpenTiebaRoute: ((ExternalRoute) -> Void)?
     var onPlainTextTap: (() -> Void)?
     var emoticonImageProvider: (String) -> UIImage? = { code in
         TiebaEmoticon.cachedImage(for: code)
@@ -1097,7 +1116,11 @@ struct InlineContentText: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onOpenUser: onOpenUser, onPlainTextTap: onPlainTextTap)
+        Coordinator(
+            onOpenUser: onOpenUser,
+            onPlainTextTap: onPlainTextTap,
+            onOpenTiebaRoute: onOpenTiebaRoute
+        )
     }
 
     func makeUIView(context: Context) -> InlineContentTextView {
@@ -1162,6 +1185,7 @@ struct InlineContentText: UIViewRepresentable {
         textView.panGestureRecognizer.isEnabled = false
         textView.normalizeContentOffsetIfTextSelectionIsInactive()
         context.coordinator.onOpenUser = onOpenUser
+        context.coordinator.onOpenTiebaRoute = onOpenTiebaRoute
         context.coordinator.onPlainTextTap = onPlainTextTap
         context.coordinator.observeArtwork(
             imageNames: rendered.emoticonImageNames,
@@ -1200,6 +1224,7 @@ struct InlineContentText: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         weak var textView: InlineContentTextView?
         var onOpenUser: ((UserSummary) -> Void)?
+        var onOpenTiebaRoute: ((ExternalRoute) -> Void)?
         var onPlainTextTap: (() -> Void)?
         private var observedArtworkImageNames: Set<String> = []
         private var artworkNotificationToken: NSObjectProtocol?
@@ -1210,10 +1235,12 @@ struct InlineContentText: UIViewRepresentable {
 
         init(
             onOpenUser: ((UserSummary) -> Void)?,
-            onPlainTextTap: (() -> Void)?
+            onPlainTextTap: (() -> Void)?,
+            onOpenTiebaRoute: ((ExternalRoute) -> Void)?
         ) {
             self.onOpenUser = onOpenUser
             self.onPlainTextTap = onPlainTextTap
+            self.onOpenTiebaRoute = onOpenTiebaRoute
         }
 
         deinit {
@@ -1319,6 +1346,13 @@ struct InlineContentText: UIViewRepresentable {
                 DispatchQueue.main.async { [weak self] in
                     self?.onOpenUser?(user)
                 }
+                return false
+            }
+            // A supported Tieba page stays inside the reader; anything else keeps
+            // the previous hand-off to Safari or the official client.
+            if let route = ExternalRoute.parse(URL),
+               let onOpenTiebaRoute = self.onOpenTiebaRoute {
+                DispatchQueue.main.async { onOpenTiebaRoute(route) }
                 return false
             }
             guard let safeURL = TiebaURL.webpage(URL.absoluteString) else { return false }
@@ -1437,9 +1471,11 @@ struct InlineContentText: UIViewRepresentable {
             case let .emoticon(code):
                 result.append(emoticonAttachment(for: code, font: font, attributes: baseAttributes))
             case .voice:
-                result.append(NSAttributedString(string: "[语音]", attributes: baseAttributes))
-            case .image, .video:
-                break
+                result.append(NSAttributedString(string: InlineMediaPlaceholder.voice, attributes: baseAttributes))
+            case .image:
+                result.append(NSAttributedString(string: InlineMediaPlaceholder.image, attributes: baseAttributes))
+            case .video:
+                result.append(NSAttributedString(string: InlineMediaPlaceholder.video, attributes: baseAttributes))
             }
         }
 
@@ -1473,9 +1509,11 @@ struct InlineContentText: UIViewRepresentable {
             case let .emoticon(code):
                 result.append(TiebaEmoticon.displayText(for: code))
             case .voice:
-                result.append("[语音]")
-            case .image, .video:
-                break
+                result.append(InlineMediaPlaceholder.voice)
+            case .image:
+                result.append(InlineMediaPlaceholder.image)
+            case .video:
+                result.append(InlineMediaPlaceholder.video)
             }
         }
         return result
