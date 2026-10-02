@@ -441,13 +441,20 @@ struct ForumHubView: View {
             )
             // A forum list without a level is still a usable forum list, so a
             // failed status read leaves the tiles unadorned instead of empty.
-            if let reported = try? await statuses.value,
-               generation == requestGeneration,
-               requestedSession == self.account?.sessionIdentity {
+            // The reason still reaches the diagnostic log, otherwise "no badge"
+            // and "wrong field name" look identical from the outside.
+            do {
+                let reported = try await statuses.value
+                guard generation == requestGeneration,
+                      requestedSession == self.account?.sessionIdentity else { return }
                 followedStatuses = Dictionary(
                     reported.map { ($0.forumID, $0) },
                     uniquingKeysWith: { _, latest in latest }
                 )
+            } catch is CancellationError {
+                return
+            } catch {
+                await AppLog.shared.recordError("进吧等级", "读取失败，等级与签到不显示", error: error)
             }
         } catch is CancellationError {
             guard generation == requestGeneration,

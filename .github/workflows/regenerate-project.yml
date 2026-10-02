@@ -1,0 +1,30 @@
+name: Regenerate Xcode project
+
+# Temporary helper. The release gate compares the committed TiebaPure.xcodeproj
+# against a fresh `xcodegen generate`, and the project file has to be updated by
+# hand whenever a Swift file is added. This workflow uploads the generated
+# project so that update does not need a failing release run.
+on:
+  workflow_dispatch:
+
+jobs:
+  regenerate:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate project
+        run: xcodegen generate --spec project.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-xcodeproj
+          path: TiebaPure.xcodeproj
+          include-hidden-files: true

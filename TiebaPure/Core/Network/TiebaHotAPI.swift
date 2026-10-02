@@ -65,19 +65,47 @@ extension TiebaAPI {
             account: account,
             includeSToken: false
         )
-        let response = try await client.postProtobuf(
-            .hotThreadList,
-            body: multipart.body,
-            contentType: multipart.contentType,
-            headers: [
-                "X-BD-DATA-TYPE": "protobuf",
-                "Cookie": "ka=open"
-            ],
-            as: Tieba_HotThreadList_HotThreadListResponse.self
-        )
+        do {
+            let response = try await client.postProtobuf(
+                .hotThreadList,
+                body: multipart.body,
+                contentType: multipart.contentType,
+                headers: [
+                    "X-BD-DATA-TYPE": "protobuf",
+                    "Cookie": TiebaFeedCookie.value(for: account)
+                ],
+                as: Tieba_HotThreadList_HotThreadListResponse.self
+            )
 
-        try validateTiebaError(response.error)
-        guard response.hasData else { throw TiebaAPIError.emptyResponse }
-        return HotFeedMapper.makeFeed(from: response.data)
+            try validateTiebaError(response.error)
+            guard response.hasData else { throw TiebaAPIError.emptyResponse }
+            let feed = HotFeedMapper.makeFeed(from: response.data)
+            await AppLog.shared.record(
+                .info,
+                "首页热点",
+                "tabCode=\(tabCode.isEmpty ? "(默认)" : tabCode) 已登录=\(account != nil) "
+                    + "子标签=\(feed.tabs.map(\.name).joined(separator: "/")) 帖子\(feed.threads.count)条 "
+                    + "来源吧=\(Self.forumNames(feed.threads))"
+            )
+            return feed
+        } catch {
+            await AppLog.shared.recordError(
+                "首页热点",
+                "tabCode=\(tabCode.isEmpty ? "(默认)" : tabCode) 失败",
+                error: error
+            )
+            throw error
+        }
+    }
+
+    /// A hot listing has no per-forum grouping, so the forum names are the only
+    /// way to tell "the service sent the global hot list" from "the service sent
+    /// the tab we expected" once a user compares it with the official app.
+    private static func forumNames(_ threads: [ThreadSummary]) -> String {
+        let names = threads
+            .prefix(8)
+            .compactMap { $0.forumName?.isEmpty == false ? $0.forumName : nil }
+        guard names.isEmpty == false else { return "(帖子未带吧名)" }
+        return names.joined(separator: "、")
     }
 }
