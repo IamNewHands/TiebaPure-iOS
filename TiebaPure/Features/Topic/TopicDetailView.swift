@@ -189,7 +189,8 @@ struct TopicDetailView: View {
                     topicID: topicID,
                     topicName: topicName,
                     cursor: cursor,
-                    page: requestedPage
+                    page: requestedPage,
+                    pageSize: TopicPagePolicy.pageSize
                 )
             }
             loadTask = task

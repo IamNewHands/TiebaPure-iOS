@@ -345,37 +345,31 @@ extension TiebaAPI {
 /// to stay local to the JSON decoding in this file.
 private extension KeyedDecodingContainer {
     func topicString(forKey key: Key) -> String {
-        if let value = try? decodeIfPresent(String.self, forKey: key) { return value ?? "" }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return value }
         if let value = try? decodeIfPresent(Int64.self, forKey: key) { return String(value) }
         if let value = try? decodeIfPresent(Double.self, forKey: key) { return String(value) }
         return ""
     }
 
     func topicInt(forKey key: Key) -> Int {
-        if let value = try? decodeIfPresent(Int.self, forKey: key) { return value ?? 0 }
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
-            return Int(clamping: value ?? 0)
-        }
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return Int(value ?? "") ?? 0
-        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return Int(clamping: value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return Int(value) ?? 0 }
         return 0
     }
 
     func topicInt64(forKey key: Key) -> Int64 {
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return value ?? 0 }
-        if let value = try? decodeIfPresent(Int.self, forKey: key) { return Int64(value ?? 0) }
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return Int64(value ?? "") ?? 0
-        }
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return Int64(value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return Int64(value) ?? 0 }
         return 0
     }
 
     func topicBool(forKey key: Key) -> Bool {
-        if let value = try? decodeIfPresent(Bool.self, forKey: key) { return value ?? false }
-        if let value = try? decodeIfPresent(Int.self, forKey: key) { return (value ?? 0) != 0 }
+        if let value = try? decodeIfPresent(Bool.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return value != 0 }
         if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return value == "1" || (value ?? "").lowercased() == "true"
+            return value == "1" || value.lowercased() == "true"
         }
         return false
     }
