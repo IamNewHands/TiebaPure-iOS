@@ -53,10 +53,12 @@ jobs:
 
       - name: Report compiled products
         run: |
+          # The test bundles are host-embedded, so they land under PlugIns/ of
+          # the app rather than at the top of the products directory.
           products="$DERIVED_DATA/Build/Products/Debug-iphonesimulator"
           test -d "$products/TiebaPure.app"
-          test -d "$products/TiebaPureTests.xctest"
-          ls -1 "$products" | head -20
+          test -d "$products/TiebaPure.app/PlugIns/TiebaPureTests.xctest"
+          ls -1 "$products"
 
   # Unit tests run independently from UI / release work so each lane can run
   # on its own runner in parallel. DerivedData is cached across runs (and
