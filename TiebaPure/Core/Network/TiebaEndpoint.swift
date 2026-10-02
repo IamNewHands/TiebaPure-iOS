@@ -14,6 +14,7 @@ enum TiebaEndpoint {
     case followedForumGuide
     case forumPageForm
     case personalized
+    case hotThreadList
     case frsPage
     case pbPage
     case pbFloor
@@ -64,6 +65,12 @@ enum TiebaEndpoint {
             return Self.base
                 .appending(path: "/c/f/excellent/personalized")
                 .appending(queryItems: [.init(name: "cmd", value: "309264")])
+        case .hotThreadList:
+            // The hot-thread (热榜) listing behind the app's 热点 tab. An empty
+            // tab code asks for the default tab plus the tab list itself.
+            return Self.base
+                .appending(path: "/c/f/forum/hotThreadList")
+                .appending(queryItems: [.init(name: "cmd", value: "309661")])
         case .frsPage:
             return Self.base
                 .appending(path: "/c/f/frs/page")

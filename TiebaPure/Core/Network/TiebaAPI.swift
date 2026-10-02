@@ -620,7 +620,7 @@ extension TiebaAPI {
             || TiebaProtobufErrorClassifier.isDecodeFailure(error)
     }
 
-    private func validateTiebaError(_ error: Tieba_Error) throws {
+    func validateTiebaError(_ error: Tieba_Error) throws {
         try validateResponseCode(
             Int(error.errorCode),
             message: error.userMsg.isEmpty ? error.errorMsg : error.userMsg

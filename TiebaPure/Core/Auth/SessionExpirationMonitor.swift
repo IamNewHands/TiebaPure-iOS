@@ -221,6 +221,12 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         }
     }
 
+    func hotThreads(account: Account?, tabCode: String) async throws -> HotFeed {
+        try await monitored(account: account) {
+            try await base.hotThreads(account: account, tabCode: tabCode)
+        }
+    }
+
     func accountThreadFavorites(
         account: Account,
         page: Int
