@@ -1,0 +1,52 @@
+name: Generate iOS protos
+
+# Helper for Protos/. The Swift sources under TiebaPure/Core/Protobuf/Generated
+# are committed, and regenerating them needs protoc plus protoc-gen-swift at the
+# exact version scripts/generate-ios-protos.sh pins (1.38.1). Running this
+# workflow builds that toolchain on a macOS runner, regenerates the sources and
+# uploads both the files and the diff, so a schema change never has to be
+# hand-written into a generated file.
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        run: |
+          if ! command -v protoc >/dev/null 2>&1; then
+            brew install protobuf
+          fi
+          protoc --version
+
+      - name: Build protoc-gen-swift 1.38.1
+        run: |
+          git clone --depth 1 --branch 1.38.1 https://github.com/apple/swift-protobuf.git "$RUNNER_TEMP/swift-protobuf"
+          cd "$RUNNER_TEMP/swift-protobuf"
+          swift build -c release --product protoc-gen-swift
+          echo "$RUNNER_TEMP/swift-protobuf/.build/release" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/swift-protobuf/.build/release/protoc-gen-swift" --version
+
+      - name: Regenerate protobuf sources
+        run: |
+          ./scripts/generate-ios-protos.sh
+          git status --porcelain
+          git --no-pager diff --stat
+
+      - name: Capture diff
+        run: git --no-pager diff > "$RUNNER_TEMP/generated-protos.diff"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-protos
+          path: TiebaPure/Core/Protobuf/Generated
+          include-hidden-files: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-protos-diff
+          path: ${{ runner.temp }}/generated-protos.diff
