@@ -12,6 +12,10 @@ struct SettingsView: View {
     @State private var confirmsLogout = false
     @State private var isLoggingOut = false
     @State private var logoutErrorMessage: String?
+    /// Mirrored into view state so the footer text follows the switch: a custom
+    /// `Binding` writing straight to `UserDefaults` would leave the rest of the
+    /// form showing the old value.
+    @State private var isDiagnosticLogEnabled = DiagnosticLogSettings().isEnabled
 
     var body: some View {
         Form {
@@ -95,6 +99,12 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle(isOn: diagnosticLogSelection) {
+                    Label("记录诊断日志", systemImage: "record.circle")
+                }
+                .accessibilityHint("关闭后完全不记录任何诊断信息，已经记录的内容不受影响")
+                .accessibilityIdentifier("settings-diagnostics-logging-toggle")
+
                 NavigationLink {
                     DiagnosticsLogView()
                 } label: {
@@ -105,7 +115,7 @@ struct SettingsView: View {
             } header: {
                 Text("诊断")
             } footer: {
-                Text("记录首页和进吧相关接口的返回情况，用于排查「内容不对」或「等级不显示」的问题。日志只保存在本机内存，退出应用即清空。")
+                Text(diagnosticLogFooterText)
             }
 
             if let account {
@@ -223,6 +233,24 @@ struct SettingsView: View {
             get: { forumSignSettingsStore.automaticSignEnabled },
             set: { forumSignSettingsStore.setAutomaticSignEnabled($0) }
         )
+    }
+
+    private var diagnosticLogSelection: Binding<Bool> {
+        Binding(
+            get: { isDiagnosticLogEnabled },
+            set: { enabled in
+                DiagnosticLogSettings().setEnabled(enabled)
+                isDiagnosticLogEnabled = enabled
+            }
+        )
+    }
+
+    private var diagnosticLogFooterText: String {
+        if isDiagnosticLogEnabled {
+            return "记录接口返回和耗时，用于排查「内容不对」「等级不显示」「签到慢」这类问题。"
+                + "只保存在本机内存，退出应用即清空；导出的内容已自动去掉凭据。"
+        }
+        return "已关闭，不再记录任何诊断信息；已经记录的内容仍可在诊断日志里查看、导出或清空。"
     }
 
     private var signFooterText: String {

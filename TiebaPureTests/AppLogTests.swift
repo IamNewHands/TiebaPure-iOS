@@ -40,6 +40,47 @@ final class AppLogTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    func testSwitchingTheLogOffRecordsNothingAtAll() async {
+        let settings = DiagnosticLogSettings()
+        let previous = settings.isEnabled
+        settings.setEnabled(false)
+        addTeardownBlock { settings.setEnabled(previous) }
+
+        let log = makeLog()
+        await log.record(.info, "分类", "不应出现")
+        await log.recordError("分类", "不应出现", error: URLError(.timedOut))
+
+        let count = await log.count()
+        let entries = await log.recent()
+        XCTAssertEqual(count, 0, "关闭后一条都不该记")
+        XCTAssertTrue(entries.isEmpty)
+        XCTAssertFalse(AppLog.isEnabled, "调用方应能同步读到关闭状态，从而跳过昂贵的消息构造")
+
+        settings.setEnabled(true)
+        await log.record(.info, "分类", "重新开启后的消息")
+        let reopened = await log.recent()
+        XCTAssertEqual(reopened.map(\.message), ["重新开启后的消息"], "重新开启后立即恢复记录")
+    }
+
+    func testDiagnosticLoggingIsOnUntilTheUserTurnsItOff() throws {
+        let name = "diagnostic-log-settings-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
+
+        let settings = DiagnosticLogSettings(defaults: defaults)
+        XCTAssertTrue(settings.isEnabled, "从未设置过时必须默认开启，否则第一次排查拿不到任何证据")
+
+        settings.setEnabled(false)
+        XCTAssertFalse(settings.isEnabled)
+        XCTAssertFalse(
+            DiagnosticLogSettings(defaults: defaults).isEnabled,
+            "关闭状态要能跨实例读到（设置页与日志页各建一个实例）"
+        )
+
+        settings.setEnabled(true)
+        XCTAssertTrue(settings.isEnabled)
+    }
+
     func testExportContainsEveryRecordedMessage() async {
         let log = makeLog()
         await log.record(.info, "进吧等级", "第1页 error_code=0")

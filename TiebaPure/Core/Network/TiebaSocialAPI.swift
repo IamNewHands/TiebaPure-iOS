@@ -496,11 +496,15 @@ extension TiebaAPI {
         // forum list key, the level key and the check-in key all come from
         // observation, so the raw skeleton is recorded before decoding rather
         // than after, where a mismatch would already be a silent empty list.
-        await AppLog.shared.record(
-            .info,
-            "进吧等级",
-            "第\(page)页 原始\(data.count)字节 结构=\(DiagnosticJSON.skeleton(data))"
-        )
+        // Building that skeleton walks the whole 39 KB payload, so it is skipped
+        // outright when the log is switched off.
+        if AppLog.isEnabled {
+            await AppLog.shared.record(
+                .info,
+                "进吧等级",
+                "第\(page)页 原始\(data.count)字节 结构=\(DiagnosticJSON.skeleton(data))"
+            )
+        }
 
         do {
             return try JSONDecoder().decode(FollowedForumGuideResponseDTO.self, from: data)
