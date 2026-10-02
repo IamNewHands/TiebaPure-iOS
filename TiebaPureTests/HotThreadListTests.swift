@@ -155,7 +155,7 @@ final class HotThreadListTests: XCTestCase {
         XCTAssertEqual(String(decoding: tabCode.payload, as: UTF8.self), "hot_all")
     }
 
-    func testRequestWithoutTabCodeOmitsTheCodeField() throws {
+    func testRequestWithoutTabCodeAsksForTheAllTab() throws {
         let request = TiebaHotRequestFactory.request(
             account: nil,
             tabCode: "",
@@ -166,9 +166,14 @@ final class HotThreadListTests: XCTestCase {
         let dataFields = try Self.wireFields(outer[0].payload)
 
         XCTAssertEqual(
-            dataFields.map(\.number),
-            [1, 2],
-            "默认分页请求只带 common 与固定的 tab_id，不写空 tab_code"
+            dataFields.map(\.number).sorted(),
+            [1, 2, 3],
+            "空 tab_code 会被改写成 all：服务端对空代码只回一条残缺列表"
+        )
+        let tabCode = try XCTUnwrap(dataFields.first { $0.number == 3 })
+        XCTAssertEqual(
+            String(decoding: tabCode.payload, as: UTF8.self),
+            HotTab.allCode
         )
     }
 
@@ -183,7 +188,11 @@ final class HotThreadListTests: XCTestCase {
         XCTAssertEqual(decoded.data.hotThreadTabInfo[0].tabCode, "hot_all")
 
         let tabs = HotFeedMapper.makeFeed(from: decoded.data).tabs
-        XCTAssertEqual(tabs, [HotTab(code: "hot_all", name: "综合")])
+        XCTAssertEqual(
+            tabs,
+            [HotTab.all, HotTab(code: "hot_all", name: "综合")],
+            "全部恒排第一，服务端的分类标签紧随其后"
+        )
     }
 
     // MARK: - Hand-crafted wire bytes, one assertion per test
@@ -250,7 +259,31 @@ final class HotThreadListTests: XCTestCase {
 
         let feed = HotFeedMapper.makeFeed(from: responseData)
 
-        XCTAssertEqual(feed.tabs, [HotTab(code: "hot_pic", name: "图片")])
+        XCTAssertEqual(
+            feed.tabs,
+            [HotTab.all, HotTab(code: "hot_pic", name: "图片")],
+            "被丢弃的两个坏标签不出现，本地补的全部仍在最前"
+        )
+    }
+
+    func testServerReportedAllTabIsNotDuplicated() {
+        var responseData = Tieba_HotThreadList_HotThreadListResponseData()
+
+        var serviceAll = Tieba_HotThreadList_FrsTabInfo()
+        serviceAll.tabCode = HotTab.allCode
+        serviceAll.tabName = "综合"
+        var other = Tieba_HotThreadList_FrsTabInfo()
+        other.tabCode = "hot_pic"
+        other.tabName = "图片"
+        responseData.hotThreadTabInfo = [serviceAll, other]
+
+        let feed = HotFeedMapper.makeFeed(from: responseData)
+
+        XCTAssertEqual(
+            feed.tabs,
+            [HotTab(code: HotTab.allCode, name: "综合"), HotTab(code: "hot_pic", name: "图片")],
+            "服务端已给 all 时不能再补一个，否则 tab 识别 id 重复"
+        )
     }
 
     func testRepeatedThreadsAreDedupedByID() {

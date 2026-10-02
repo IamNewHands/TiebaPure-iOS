@@ -45,7 +45,7 @@ struct HotThreadsView: View {
     let onOpenUser: (UserSummary) -> Void
 
     @State private var tabs: [HotTab] = []
-    @State private var selectedTabCode = ""
+    @State private var selectedTabCode = HotTab.allCode
     @State private var threads: [ThreadSummary] = []
     @State private var isLoading = false
     @State private var didLoad = false
@@ -71,7 +71,7 @@ struct HotThreadsView: View {
             requestGeneration += 1
             loadTask?.cancel()
             tabs = []
-            selectedTabCode = ""
+            selectedTabCode = HotTab.allCode
             threads = []
             errorMessage = nil
             didLoad = false
@@ -227,9 +227,11 @@ struct HotThreadsView: View {
             tabs = feed.tabs
             threads = feed.threads.filter(TiebaContentFilter.shouldKeep(thread:))
             // A sub-tab the service stopped reporting must not leave the tab bar
-            // pointing at a listing that can no longer be requested.
+            // pointing at a listing that can no longer be requested. 全部 is
+            // always on the bar, so the selection falls back to it and the next
+            // refresh puts the highlighted chip and the list back in agreement.
             if tabs.contains(where: { $0.code == tabCode }) == false {
-                selectedTabCode = ""
+                selectedTabCode = HotTab.allCode
             }
         } catch is CancellationError {
             guard generation == requestGeneration,

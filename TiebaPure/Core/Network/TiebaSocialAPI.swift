@@ -367,37 +367,29 @@ struct FollowedForumGuideResponseDTO: Decodable {
         }
     }
 
-    struct DataDTO: Decodable {
-        var forums: [ForumDTO]
-        var hasMore: Bool
-
-        enum CodingKeys: String, CodingKey {
-            case forums = "like_forum"
-            case hasMore = "like_forum_has_more"
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            forums = try container.decodeIfPresent([ForumDTO].self, forKey: .forums) ?? []
-            hasMore = container.flexibleBool(forKey: .hasMore)
-        }
-    }
-
+    /// The guide payload is flat: the list and its paging flag sit next to the
+    /// error code, not inside a `data` wrapper. Decoding a nested `data` read
+    /// `nil` on every successful response, which the caller then reported as
+    /// "the service answered with empty data" — the exact 39KB-then-failure
+    /// pair the diagnostic log recorded.
+    var forums: [ForumDTO]
+    var hasMore: Bool
     var errorCode: Int
     var errorMessage: String
-    var data: DataDTO?
 
     enum CodingKeys: String, CodingKey {
+        case forums = "like_forum"
+        case hasMore = "like_forum_has_more"
         case errorCode = "error_code"
         case errorMessage = "error_msg"
-        case data
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        forums = try container.decodeIfPresent([ForumDTO].self, forKey: .forums) ?? []
+        hasMore = container.flexibleBool(forKey: .hasMore)
         errorCode = container.flexibleInt(forKey: .errorCode)
         errorMessage = container.decodeStringIfPresent(forKey: .errorMessage) ?? ""
-        data = try container.decodeIfPresent(DataDTO.self, forKey: .data)
     }
 }
 
@@ -423,9 +415,8 @@ extension TiebaAPI {
         while page <= FollowedForumGuidePolicy.maximumPages {
             let response = try await followedForumGuidePage(account: account, page: page)
             try TiebaResponseValidator.validate(code: response.errorCode, message: response.errorMessage)
-            guard let data = response.data else { throw TiebaAPIError.emptyResponse }
 
-            let decoded = data.forums.compactMap { forum -> FollowedForumStatus? in
+            let decoded = response.forums.compactMap { forum -> FollowedForumStatus? in
                 guard forum.forumID > 0 else { return nil }
                 return FollowedForumStatus(
                     forumID: forum.forumID,
@@ -437,15 +428,27 @@ extension TiebaAPI {
             await AppLog.shared.record(
                 .info,
                 "进吧等级",
-                "第\(page)页 error_code=\(response.errorCode) has_more=\(data.hasMore) "
-                    + "原始\(data.forums.count)条 有效\(decoded.count)条 "
+                "第\(page)页 error_code=\(response.errorCode) has_more=\(response.hasMore) "
+                    + "原始\(response.forums.count)条 有效\(decoded.count)条 "
                     + "等级分布=\(Self.levelHistogram(decoded))"
             )
+
+            // A first page without the list is either an account with no
+            // followed forums or a field-name miss — the line above carries the
+            // raw key list, which is the only thing that tells them apart.
+            if page == 1, response.forums.isEmpty {
+                await AppLog.shared.record(
+                    .error,
+                    "进吧等级",
+                    "第1页没有 like_forum 条目：要么该吧关注数为0，要么字段名对不上；键列表见上一行"
+                )
+                break
+            }
 
             statuses.append(contentsOf: decoded)
 
             // An empty page with a sticky "has more" flag would otherwise spin.
-            guard data.hasMore, data.forums.isEmpty == false else { break }
+            guard response.hasMore, response.forums.isEmpty == false else { break }
             page += 1
         }
 
