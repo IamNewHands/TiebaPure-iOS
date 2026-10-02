@@ -190,10 +190,11 @@ enum DiagnosticRedaction {
 /// reported only for the numeric and boolean leaves that make an error code
 /// readable, and object/array keys are reported in full.
 enum DiagnosticJSON {
-    /// A forum guide row has a handful of fields, so the sample is generous
-    /// enough to show a real shape while a pathological payload still prints
-    /// a readable prefix.
-    private static let maxEntriesPerObject = 6
+    /// The key list is the payload: a nested-vs-flat mismatch hides exactly in
+    /// the keys a six-entry cap truncated away, and a guide row carries well
+    /// under forty fields, so the cap now only guards against a pathological
+    /// response instead of steering what is visible.
+    private static let maxEntriesPerObject = 40
 
     static func skeleton(_ data: Data) -> String {
         let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])

@@ -10,9 +10,16 @@ struct HotFeed: Equatable, Sendable {
     var threads: [ThreadSummary] = []
 }
 
-/// One sub-tab of the hot-thread listing. An empty code means the service's
-/// default tab, which is how the tab asks for the first page.
+/// One sub-tab of the hot-thread listing.
 struct HotTab: Identifiable, Equatable, Sendable {
+    /// The whole-list tab. The service reports only its category sub-tabs
+    /// (视频/长更/游戏/数码…) in `hot_thread_tab_info`, and `tab_code="all"` is
+    /// the only request that answers with the full hot list — so the chip is
+    /// built here, and it is also what a freshly opened tab starts on.
+    static let allCode = "all"
+    static let allName = "全部"
+    static let all = HotTab(code: allCode, name: allName)
+
     var code: String
     var name: String
 

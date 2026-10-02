@@ -102,4 +102,20 @@ final class AppLogTests: XCTestCase {
         XCTAssertEqual(DiagnosticJSON.skeleton(Data("[]".utf8)), "[]")
         XCTAssertEqual(DiagnosticJSON.skeleton(Data("\"\"".utf8)), "String(empty)")
     }
+
+    func testSkeletonNeverTruncatesTheFieldListTheDiagnosisDependsOn() {
+        // 顶层键列表就是诊断依据：缺了 like_forum 之外的某个键看不出扁平/嵌套，
+        // 所以超过旧的 6 键上限也必须一个不少地打出来。
+        let json = #"{"block_pop_info":null,"ctime":"1","data":null,"error_code":0,"error_msg":"","fold_display_num":null,"forum_create_info":null,"like_forum":[],"like_forum_has_more":0,"other":1,"user":{}}"#
+        let skeleton = DiagnosticJSON.skeleton(Data(json.utf8))
+
+        for key in [
+            "block_pop_info", "ctime", "data", "error_code", "error_msg",
+            "fold_display_num", "forum_create_info", "like_forum",
+            "like_forum_has_more", "other", "user"
+        ] {
+            XCTAssertTrue(skeleton.contains(key), "字段 \(key) 不该被截断")
+        }
+        XCTAssertFalse(skeleton.contains("…"), "字段列表不该再出现 …N more 截断尾")
+    }
 }
