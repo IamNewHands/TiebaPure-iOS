@@ -8,6 +8,7 @@ DerivedData/
 outputs/
 artifacts/
 screenshots/
+.uploads/
 
 *.ipa
 *.xcarchive
