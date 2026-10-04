@@ -230,6 +230,11 @@ protocol ContentDraftMigrationDestination: ContentDraftPersistenceBackend {
     func backendGenerationID() throws -> String?
     func backendGenerationIDAsync() async throws -> String?
     func installNativeBackendMarker(generationID: String) throws
+    /// Rewrites the store's backend marker to the committed generation,
+    /// replacing a marker left behind by an earlier database. Draft rows are
+    /// never touched: the generation only identifies the backend, so adopting
+    /// the state file's value cannot lose a record.
+    func replaceNativeBackendMarker(generationID: String) throws
     func beginMigration(
         to manifest: ContentDraftMigrationManifest,
         generationID: String

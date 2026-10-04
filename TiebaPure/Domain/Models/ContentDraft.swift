@@ -652,6 +652,34 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftMigrationDestin
         }
     }
 
+    /// Adopts the committed state file's generation over a marker row left by
+    /// an earlier database. Only the marker is rewritten, so this can never
+    /// drop a draft.
+    func replaceNativeBackendMarker(generationID: String) throws {
+        guard UUID(uuidString: generationID) != nil else {
+            throw ContentDraftPersistenceError.destinationMarkerMismatch
+        }
+        do {
+            for marker in try modelContext.fetch(
+                FetchDescriptor<ContentDraftBackendMarkerRecord>()
+            ) {
+                modelContext.delete(marker)
+            }
+            modelContext.insert(ContentDraftBackendMarkerRecord(
+                key: Self.markerKey,
+                formatVersion: Self.markerFormatVersion,
+                generationID: generationID
+            ))
+            try modelContext.save()
+            guard try backendGenerationID() == generationID else {
+                throw ContentDraftPersistenceError.destinationMarkerMismatch
+            }
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     /// Returns `true` when the store was read successfully. `draft` is `nil`
     /// for a successful miss, keeping that case distinct from a read failure.
     @discardableResult

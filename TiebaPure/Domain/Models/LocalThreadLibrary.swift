@@ -456,6 +456,10 @@ struct ThreadReadingPositionBackendState: Codable, Equatable, Sendable {
 protocol ThreadReadingPositionMigrationDestination: ThreadReadingPositionPersistence {
     func backendGenerationID() throws -> String?
     func establishNativeBackendMarker(generationID: String) throws
+    /// Rewrites the store's backend marker to the committed generation,
+    /// replacing a marker left behind by an earlier database. Reading positions
+    /// are never touched: the generation only identifies the backend.
+    func replaceNativeBackendMarker(generationID: String) throws
     func replaceAllForMigration(
         _ positions: [ThreadReadingPosition],
         generationID: String
@@ -745,6 +749,34 @@ final class SwiftDataThreadReadingPositionPersistence:
         }
     }
 
+    /// Adopts the committed state file's generation over a marker row left by
+    /// an earlier database. Only the marker is rewritten, so no reading
+    /// position can be lost.
+    func replaceNativeBackendMarker(generationID: String) throws {
+        guard UUID(uuidString: generationID) != nil else {
+            throw MarkerError.invalidMarker
+        }
+        do {
+            for marker in try modelContext.fetch(
+                FetchDescriptor<ThreadReadingPositionBackendMarkerRecord>()
+            ) {
+                modelContext.delete(marker)
+            }
+            modelContext.insert(ThreadReadingPositionBackendMarkerRecord(
+                key: Self.markerKey,
+                formatVersion: Self.markerFormatVersion,
+                generationID: generationID
+            ))
+            try modelContext.save()
+            guard try backendGenerationID() == generationID else {
+                throw MarkerError.invalidMarker
+            }
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     func replaceAllForMigration(
         _ positions: [ThreadReadingPosition],
         generationID: String
@@ -902,15 +934,24 @@ struct ThreadReadingPositionPersistenceFactory {
         guard destination.capability.isDurable else {
             throw ThreadReadingPositionPersistenceFactoryError.destinationIsNotDurable
         }
-        guard try destination.backendGenerationID() == nil else {
-            throw ThreadReadingPositionPersistenceFactoryError.markerMismatch
-        }
+        // A marker without state is a lost activation commit. The database is
+        // still the only copy of the positions, so re-elect the backend token
+        // over a leftover one instead of leaving reading positions unavailable
+        // for the rest of the install; no position row is touched.
+        let leftoverGeneration = try destination.backendGenerationID()
         let generationID = UUID().uuidString.lowercased()
         let pendingState = try file.prepareNativeSwiftDataActivation(
             generationID: generationID,
             now: now()
         )
-        try destination.establishNativeBackendMarker(generationID: generationID)
+        if let leftoverGeneration {
+            PersistenceDiagnostics.note(
+                "阅读进度后端：只找到数据库标记（\(leftoverGeneration)）而没有状态文件，已重新选举后端标记（未删除任何记录）"
+            )
+            try destination.replaceNativeBackendMarker(generationID: generationID)
+        } else {
+            try destination.establishNativeBackendMarker(generationID: generationID)
+        }
         guard try destination.backendGenerationID() == generationID else {
             throw ThreadReadingPositionPersistenceFactoryError.markerMismatch
         }
@@ -946,18 +987,12 @@ struct ThreadReadingPositionPersistenceFactory {
             guard let expectedGeneration = state.activation?.destinationGenerationID else {
                 throw ThreadReadingPositionPersistenceFactoryError.invalidState
             }
-            if let existingGeneration = try destination.backendGenerationID() {
-                guard existingGeneration == expectedGeneration else {
-                    throw ThreadReadingPositionPersistenceFactoryError.markerMismatch
-                }
-            } else {
-                try destination.establishNativeBackendMarker(
-                    generationID: expectedGeneration
-                )
-            }
-            guard try destination.backendGenerationID() == expectedGeneration else {
-                throw ThreadReadingPositionPersistenceFactoryError.markerMismatch
-            }
+            try Self.adoptCommittedGeneration(
+                expectedGeneration,
+                in: destination,
+                context: "阅读进度后端",
+                missingMarkerIsRepair: false
+            )
             try file.activateNativeSwiftData(pendingState: state, now: now())
             return destination
 
@@ -969,12 +1004,46 @@ struct ThreadReadingPositionPersistenceFactory {
             guard destination.capability.isDurable else {
                 throw ThreadReadingPositionPersistenceFactoryError.destinationIsNotDurable
             }
-            guard let expectedGeneration = state.activation?.destinationGenerationID,
-                  try destination.backendGenerationID() == expectedGeneration else {
-                throw ThreadReadingPositionPersistenceFactoryError.markerMismatch
+            guard let expectedGeneration = state.activation?.destinationGenerationID else {
+                throw ThreadReadingPositionPersistenceFactoryError.invalidState
             }
+            try Self.adoptCommittedGeneration(
+                expectedGeneration,
+                in: destination,
+                context: "阅读进度后端",
+                missingMarkerIsRepair: true
+            )
             return destination
         }
+    }
+
+    /// Makes the store's own marker agree with the committed state file.
+    ///
+    /// The state file is the backend-selection commit point and the marker is
+    /// only the store's copy of the same token. A store whose marker is missing
+    /// or belongs to an earlier database used to leave reading positions
+    /// unavailable for the rest of the install with no recovery and no record
+    /// of why. Rewriting the marker never touches a position record.
+    private static func adoptCommittedGeneration(
+        _ generationID: String,
+        in destination: any ThreadReadingPositionMigrationDestination,
+        context: String,
+        missingMarkerIsRepair: Bool
+    ) throws {
+        guard let existingGeneration = try destination.backendGenerationID() else {
+            try destination.establishNativeBackendMarker(generationID: generationID)
+            if missingMarkerIsRepair {
+                PersistenceDiagnostics.note(
+                    "\(context)：数据库缺少后端标记，已按已提交状态重建（未删除任何记录）"
+                )
+            }
+            return
+        }
+        guard existingGeneration != generationID else { return }
+        try destination.replaceNativeBackendMarker(generationID: generationID)
+        PersistenceDiagnostics.note(
+            "\(context)：数据库标记与已提交状态不一致（库内 \(existingGeneration)，状态 \(generationID)），已按状态覆盖（未删除任何记录）"
+        )
     }
 
     private func migrateToSwiftData(

@@ -368,7 +368,7 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testMissingManifestWithExistingDestinationMarkerFailsClosed() throws {
+    func testMissingManifestWithExistingDestinationMarkerReelectsBackendKeepingEntries() throws {
         let stateDirectory = try makeScratchDirectory(function: "state")
         let destinationDirectory = try makeScratchDirectory(function: "destination")
         let marker = TestOrderedCollectionBackendMarkerPersistence()
@@ -385,6 +385,7 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
             destination
         }.make()
         let expectedDestination = try destination.snapshot()
+        let abandonedGeneration = try XCTUnwrap(marker.generation)
 
         let manifest = try SecureCodableFile<OrderedCollectionPersistenceManifest>(
             directoryURL: stateDirectory,
@@ -393,17 +394,21 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
         try FileManager.default.removeItem(at: manifest.fileURL)
         try FileManager.default.removeItem(at: manifest.backupURL)
 
-        let unresolved = OrderedCollectionPersistenceFactory(
+        let resolved = OrderedCollectionPersistenceFactory(
             directoryURL: stateDirectory,
             supportsSwiftData: true
         ) {
             destination
         }.make()
 
-        XCTAssertEqual(unresolved.browsingHistory.capability, .unavailable)
+        // The marker is only the store's copy of the backend token: with the
+        // manifest gone the election is redone over the leftover marker, and
+        // the entries already in the database stay readable.
+        XCTAssertEqual(resolved.browsingHistory.capability, .durable)
         XCTAssertEqual(try destination.snapshot(), expectedDestination)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: manifest.fileURL.path))
         XCTAssertNotNil(marker.generation)
+        XCTAssertNotEqual(marker.generation, abandonedGeneration)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: manifest.fileURL.path))
     }
 
     @MainActor
@@ -520,7 +525,7 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testActiveSwiftDataFailsClosedAfterDatabaseRebuildLosesMarker() throws {
+    func testActiveSwiftDataAdoptsCommittedGenerationAfterDatabaseRebuildLosesMarker() throws {
         let stateDirectory = try makeScratchDirectory(function: "state")
         let destinationDirectory = try makeScratchDirectory(function: "destination")
         let expectedGeneration = "22222222-2222-2222-2222-222222222222"
@@ -542,13 +547,18 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
             supportsSwiftData: true
         ) { rebuiltDestination }.make()
 
-        XCTAssertEqual(resolved.browsingHistory.capability, .unavailable)
-        XCTAssertNil(rebuiltMarker.generation)
-        XCTAssertEqual(rebuiltMarker.replaceCallCount, 0)
+        // The manifest is the backend-selection commit point, and the marker is
+        // only the store's copy of the same token: a database that lost its own
+        // marker is claimed by the committed generation instead of leaving
+        // browsing history, recent forums and search history unavailable for the
+        // rest of the install.
+        XCTAssertEqual(resolved.browsingHistory.capability, .durable)
+        XCTAssertEqual(rebuiltMarker.generation, expectedGeneration)
+        XCTAssertEqual(rebuiltMarker.replaceCallCount, 1)
     }
 
     @MainActor
-    func testActiveAndPendingSwiftDataRejectMarkerGenerationMismatch() throws {
+    func testActiveAndPendingSwiftDataAdoptCommittedGenerationOverStaleMarker() throws {
         for migrationState in [
             OrderedCollectionMigrationState.notRequired,
             .swiftDataActivationPending
@@ -579,9 +589,12 @@ final class FileOrderedCollectionPersistenceTests: XCTestCase {
                 supportsSwiftData: true
             ) { destination }.make()
 
-            XCTAssertEqual(resolved.browsingHistory.capability, .unavailable)
-            XCTAssertEqual(marker.generation, "44444444-4444-4444-4444-444444444444")
-            XCTAssertEqual(marker.replaceCallCount, 0)
+            // A marker left by an earlier database is replaced with the
+            // committed generation; nothing stored in the destination is
+            // dropped, because the generation only names the backend.
+            XCTAssertEqual(resolved.browsingHistory.capability, .durable)
+            XCTAssertEqual(marker.generation, expectedGeneration)
+            XCTAssertEqual(marker.replaceCallCount, 1)
         }
     }
 

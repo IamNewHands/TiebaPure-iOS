@@ -1354,20 +1354,29 @@ final class LocalThreadLibraryPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testMissingStateWithExistingDestinationMarkerFailsClosed() throws {
+    func testMissingStateWithExistingDestinationMarkerReelectsBackendKeepingPositions() throws {
         let fileURL = makeTemporaryFileURL()
         let destination = TestThreadReadingPositionPersistence()
-        destination.generationID = "11111111-1111-1111-1111-111111111111"
+        destination.values = [makePosition(threadID: 8, postID: 808, floor: 8, updatedAt: 8)]
+        let abandonedGeneration = "11111111-1111-1111-1111-111111111111"
+        destination.generationID = abandonedGeneration
 
         let resolved = ThreadReadingPositionPersistenceFactory(
             fileURL: fileURL,
             supportsSwiftData: true
         ) { destination }.make()
 
-        XCTAssertEqual(resolved.capability, .unavailable)
-        XCTAssertThrowsError(try resolved.load())
-        XCTAssertNil(
-            try FileThreadReadingPositionPersistence(fileURL: fileURL).loadBackendState()
+        // The marker is only the store's copy of the backend token: with the
+        // state file gone the election is redone over the leftover marker, and
+        // the positions already in the database stay readable.
+        XCTAssertEqual(resolved.capability, .durable)
+        XCTAssertEqual(try resolved.load().map(\.threadID), [8])
+        XCTAssertNotNil(destination.generationID)
+        XCTAssertNotEqual(destination.generationID, abandonedGeneration)
+        let file = try FileThreadReadingPositionPersistence(fileURL: fileURL)
+        XCTAssertEqual(
+            try file.loadBackendState()?.activation?.destinationGenerationID,
+            destination.generationID
         )
     }
 
@@ -1475,7 +1484,7 @@ final class LocalThreadLibraryPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testCompletedMigrationFailsClosedWhenDestinationMarkerIsLost() throws {
+    func testCompletedMigrationRestoresLostDestinationMarkerFromCommittedState() throws {
         let fileURL = makeTemporaryFileURL()
         let source = ThreadReadingPositionPersistenceFactory(
             fileURL: fileURL,
@@ -1489,6 +1498,7 @@ final class LocalThreadLibraryPersistenceTests: XCTestCase {
             fileURL: fileURL,
             supportsSwiftData: true
         ) { destination }.make()
+        let committedGeneration = try XCTUnwrap(destination.generationID)
         destination.generationID = nil
 
         let reopened = ThreadReadingPositionPersistenceFactory(
@@ -1496,9 +1506,13 @@ final class LocalThreadLibraryPersistenceTests: XCTestCase {
             supportsSwiftData: true
         ) { destination }.make()
 
-        XCTAssertEqual(reopened.capability, .unavailable)
-        XCTAssertThrowsError(try reopened.load())
-        XCTAssertEqual(destination.values.map(\.threadID), [6])
+        // The state file is the backend-selection commit point: the lost marker
+        // is restored from it so the stored positions stay reachable instead of
+        // going unavailable for the rest of the install.
+        XCTAssertEqual(reopened.capability, .durable)
+        XCTAssertTrue(reopened === destination)
+        XCTAssertEqual(try reopened.load().map(\.threadID), [6])
+        XCTAssertEqual(destination.generationID, committedGeneration)
     }
 
     @MainActor
@@ -1636,6 +1650,10 @@ private final class TestThreadReadingPositionPersistence:
             guard existing == generationID else { throw ExpectedMarkerError.mismatch }
             return
         }
+        self.generationID = generationID
+    }
+
+    func replaceNativeBackendMarker(generationID: String) throws {
         self.generationID = generationID
     }
 

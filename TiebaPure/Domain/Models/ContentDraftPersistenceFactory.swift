@@ -238,18 +238,14 @@ enum ContentDraftPersistenceFactory {
                       let generationID = state.destinationGenerationID else {
                     throw ContentDraftPersistenceError.unavailable
                 }
-                if let existingGeneration = try swiftDataBackend.backendGenerationID() {
-                    guard existingGeneration == generationID else {
-                        throw ContentDraftPersistenceError.destinationMarkerMismatch
-                    }
-                } else {
-                    try swiftDataBackend.installNativeBackendMarker(
-                        generationID: generationID
-                    )
-                }
-                guard try swiftDataBackend.backendGenerationID() == generationID else {
-                    throw ContentDraftPersistenceError.destinationMarkerMismatch
-                }
+                // A missing marker is the normal shape here: activation writes
+                // the pending state before it writes the marker.
+                try adoptCommittedGeneration(
+                    generationID,
+                    in: swiftDataBackend,
+                    context: "草稿后端",
+                    missingMarkerIsRepair: false
+                )
                 let activeState = ContentDraftPersistenceState.initialSwiftData(
                     generationID: generationID
                 )
@@ -260,12 +256,17 @@ enum ContentDraftPersistenceFactory {
                 guard swiftDataBackend.persistenceAvailability.canPersist else {
                     throw ContentDraftPersistenceError.unavailable
                 }
-                guard let generationID = state.destinationGenerationID,
-                      try swiftDataBackend.backendGenerationID() == generationID else {
+                guard let generationID = state.destinationGenerationID else {
                     throw ContentDraftPersistenceError.destinationMarkerMismatch
                 }
                 // Once the state commits SwiftData as active, it remains the
                 // sole authority. The retained source is deliberately not read.
+                try adoptCommittedGeneration(
+                    generationID,
+                    in: swiftDataBackend,
+                    context: "草稿后端",
+                    missingMarkerIsRepair: true
+                )
                 return swiftDataBackend
             case .secureFiles:
                 let source = try FileContentDraftPersistenceBackend(
@@ -302,18 +303,25 @@ enum ContentDraftPersistenceFactory {
             // durable SwiftData records when availability recovers.
             throw ContentDraftPersistenceError.unavailable
         }
-        // A pre-existing marker without state can be a lost activation commit.
-        // Never auto-adopt it or reconstruct state from the destination alone.
-        guard try swiftDataBackend.backendGenerationID() == nil else {
-            throw ContentDraftPersistenceStateError.ambiguousBackends
-        }
+        // A marker without state is a lost activation commit. The database is
+        // still the only copy of the drafts, so re-elect the backend token over
+        // a leftover one instead of refusing every draft read for the rest of
+        // the install; no draft row is touched either way.
+        let leftoverGeneration = try swiftDataBackend.backendGenerationID()
         let generationID = UUID().uuidString.lowercased()
         let pendingState = ContentDraftPersistenceState.nativeActivationPending(
             generationID: generationID
         )
         _ = try pendingState.validated()
         try stateFile.replace(pendingState)
-        try swiftDataBackend.installNativeBackendMarker(generationID: generationID)
+        if let leftoverGeneration {
+            PersistenceDiagnostics.note(
+                "草稿后端：只找到数据库标记（\(leftoverGeneration)）而没有状态文件，已重新选举后端标记（未删除任何记录）"
+            )
+            try swiftDataBackend.replaceNativeBackendMarker(generationID: generationID)
+        } else {
+            try swiftDataBackend.installNativeBackendMarker(generationID: generationID)
+        }
         guard try swiftDataBackend.backendGenerationID() == generationID else {
             throw ContentDraftPersistenceError.destinationMarkerMismatch
         }
@@ -323,6 +331,38 @@ enum ContentDraftPersistenceFactory {
         _ = try initialState.validated()
         try stateFile.replace(initialState)
         return swiftDataBackend
+    }
+
+    /// Makes the store's own marker agree with the committed state file.
+    ///
+    /// The state file is the backend-selection commit point and the marker is
+    /// only the store's copy of the same token. A store whose marker is missing
+    /// or belongs to an earlier database used to refuse every draft read for
+    /// the rest of the install, with no way for the user to recover and no
+    /// record of why. Rewriting the marker never touches a draft record, so a
+    /// database rebuilt without one simply starts answering with the records it
+    /// actually holds.
+    @available(iOS 17.0, *)
+    private static func adoptCommittedGeneration(
+        _ generationID: String,
+        in backend: SwiftDataContentDraftPersistenceBackend,
+        context: String,
+        missingMarkerIsRepair: Bool
+    ) throws {
+        guard let existingGeneration = try backend.backendGenerationID() else {
+            try backend.installNativeBackendMarker(generationID: generationID)
+            if missingMarkerIsRepair {
+                PersistenceDiagnostics.note(
+                    "\(context)：数据库缺少后端标记，已按已提交状态重建（未删除任何记录）"
+                )
+            }
+            return
+        }
+        guard existingGeneration != generationID else { return }
+        try backend.replaceNativeBackendMarker(generationID: generationID)
+        PersistenceDiagnostics.note(
+            "\(context)：数据库标记与已提交状态不一致（库内 \(existingGeneration)，状态 \(generationID)），已按状态覆盖（未删除任何记录）"
+        )
     }
 }
 

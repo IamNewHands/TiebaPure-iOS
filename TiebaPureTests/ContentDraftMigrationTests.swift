@@ -418,7 +418,7 @@ final class ContentDraftMigrationTests: XCTestCase {
     }
 
     @MainActor
-    func testActiveSwiftDataStateFailsClosedWhenDatabaseWasRebuiltWithoutMarker() throws {
+    func testActiveSwiftDataStateAdoptsCommittedGenerationWhenDatabaseWasRebuiltWithoutMarker() throws {
         let directory = try makeDirectory()
         let original = SwiftDataContentDraftPersistenceBackend(
             modelContainer: try makeContainer()
@@ -427,41 +427,48 @@ final class ContentDraftMigrationTests: XCTestCase {
             directoryURL: directory,
             swiftDataBackend: original
         )
+        let committedGeneration = try XCTUnwrap(original.backendGenerationID())
         let rebuilt = SwiftDataContentDraftPersistenceBackend(
             modelContainer: try makeContainer()
         )
 
         XCTAssertNil(try rebuilt.backendGenerationID())
-        XCTAssertThrowsError(try ContentDraftPersistenceFactory.resolveIOS17Backend(
+        let adopted = try ContentDraftPersistenceFactory.resolveIOS17Backend(
             directoryURL: directory,
             swiftDataBackend: rebuilt
-        )) { error in
-            XCTAssertEqual(error as? ContentDraftPersistenceError, .destinationMarkerMismatch)
-        }
+        )
+
+        // The state file is the backend-selection commit point and the marker is
+        // only the store's copy of the same token: a database that lost its own
+        // marker is claimed by the committed generation instead of refusing
+        // every draft read for the rest of the install.
+        XCTAssertTrue(adopted === rebuilt)
+        XCTAssertEqual(try rebuilt.backendGenerationID(), committedGeneration)
     }
 
     @MainActor
-    func testActiveSwiftDataStateFailsClosedForMarkerGenerationMismatch() throws {
+    func testActiveSwiftDataStateAdoptsCommittedStateOverStaleMarkerGeneration() throws {
         let directory = try makeDirectory()
         let stateFile = try ContentDraftPersistenceFactory.makeStateFile(
             directoryURL: directory
         )
+        let committedGeneration = "11111111-1111-1111-1111-111111111111"
         try stateFile.replace(.initialSwiftData(
-            generationID: "11111111-1111-1111-1111-111111111111"
+            generationID: committedGeneration
         ))
         let destination = SwiftDataContentDraftPersistenceBackend(
             modelContainer: try makeContainer()
         )
-        let actualGeneration = UUID().uuidString.lowercased()
-        try destination.installNativeBackendMarker(generationID: actualGeneration)
-        XCTAssertNotEqual(actualGeneration, "11111111-1111-1111-1111-111111111111")
+        let staleGeneration = UUID().uuidString.lowercased()
+        try destination.installNativeBackendMarker(generationID: staleGeneration)
+        XCTAssertNotEqual(staleGeneration, committedGeneration)
 
-        XCTAssertThrowsError(try ContentDraftPersistenceFactory.resolveIOS17Backend(
+        _ = try ContentDraftPersistenceFactory.resolveIOS17Backend(
             directoryURL: directory,
             swiftDataBackend: destination
-        )) { error in
-            XCTAssertEqual(error as? ContentDraftPersistenceError, .destinationMarkerMismatch)
-        }
+        )
+
+        XCTAssertEqual(try destination.backendGenerationID(), committedGeneration)
     }
 
     @MainActor
@@ -510,28 +517,38 @@ final class ContentDraftMigrationTests: XCTestCase {
     }
 
     @MainActor
-    func testMissingStateWithExistingDestinationMarkerFailsClosed() throws {
+    func testMissingStateWithExistingDestinationMarkerReelectsBackendKeepingDrafts() throws {
         let directory = try makeDirectory()
         let destination = SwiftDataContentDraftPersistenceBackend(
             modelContainer: try makeContainer()
         )
-        let generationID = "33333333-3333-3333-3333-333333333333"
-        try destination.installNativeBackendMarker(generationID: generationID)
+        let staleGeneration = "33333333-3333-3333-3333-333333333333"
+        try destination.installNativeBackendMarker(generationID: staleGeneration)
+        let draft = makeDraft(threadID: 7, marker: 7)
+        XCTAssertTrue(destination.save(draft))
         let stateFile = try ContentDraftPersistenceFactory.makeStateFile(
             directoryURL: directory
         )
-        try stateFile.replace(.initialSwiftData(generationID: generationID))
+        try stateFile.replace(.initialSwiftData(generationID: staleGeneration))
         try FileManager.default.removeItem(at: stateFile.fileURL)
         try FileManager.default.removeItem(at: stateFile.backupURL)
 
-        XCTAssertThrowsError(try ContentDraftPersistenceFactory.resolveIOS17Backend(
+        let resolved = try ContentDraftPersistenceFactory.resolveIOS17Backend(
             directoryURL: directory,
             swiftDataBackend: destination
-        )) { error in
-            XCTAssertEqual(error as? ContentDraftPersistenceStateError, .ambiguousBackends)
-        }
-        XCTAssertFalse(FileManager.default.fileExists(atPath: stateFile.fileURL.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: stateFile.backupURL.path))
+        )
+
+        // The marker is only the store's copy of the backend token: with the
+        // state file gone the election is redone over the leftover marker, and
+        // the drafts already in the database stay readable.
+        XCTAssertTrue(resolved === destination)
+        XCTAssertNotEqual(try destination.backendGenerationID(), staleGeneration)
+        XCTAssertEqual(resolved.draft(accountID: "account", target: draft.target), draft)
+        XCTAssertEqual(try stateFile.load()?.activeBackend, .swiftData)
+        XCTAssertEqual(
+            try stateFile.load()?.destinationGenerationID,
+            try destination.backendGenerationID()
+        )
     }
 
     @MainActor

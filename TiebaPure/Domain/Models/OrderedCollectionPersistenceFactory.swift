@@ -249,8 +249,15 @@ struct OrderedCollectionPersistenceFactory {
                 return bundle
             }
             let marker = try Self.requireDurableMarker(from: bundle)
-            guard try marker.loadGeneration() == nil else {
-                throw OrderedCollectionPersistenceFactoryError.ambiguousBackendRecovery
+            // A marker without a manifest is a lost activation commit. The
+            // database is still the only copy of the local records, so re-elect
+            // the backend token over the leftover one instead of leaving
+            // browsing history, recent forums and search history unavailable
+            // for the rest of the install; no entry is touched.
+            if let leftoverGeneration = try marker.loadGeneration() {
+                PersistenceDiagnostics.note(
+                    "浏览历史后端：只找到数据库标记（\(leftoverGeneration)）而没有清单文件，已重新选举后端标记（未删除任何记录）"
+                )
             }
             let generation = UUID().uuidString
             try manifestFile.replace(.pendingSwiftDataActivation(
@@ -303,10 +310,15 @@ struct OrderedCollectionPersistenceFactory {
                 throw OrderedCollectionPersistenceFactoryError.destinationIsNotDurable
             }
             let marker = try Self.requireDurableMarker(from: bundle)
-            guard let expectedGeneration = manifest.destinationGeneration,
-                  try marker.loadGeneration() == expectedGeneration else {
-                throw OrderedCollectionPersistenceFactoryError.destinationMarkerMismatch
+            guard let expectedGeneration = manifest.destinationGeneration else {
+                throw OrderedCollectionPersistenceFactoryError.inconsistentManifest
             }
+            try Self.adoptCommittedGeneration(
+                expectedGeneration,
+                marker: marker,
+                context: "浏览历史后端",
+                missingMarkerIsRepair: true
+            )
             return bundle
 
         case .secureFiles:
@@ -368,14 +380,12 @@ struct OrderedCollectionPersistenceFactory {
         generation: String,
         manifestFile: SecureCodableFile<OrderedCollectionPersistenceManifest>
     ) throws -> OrderedCollectionPersistenceBundle {
-        switch try marker.loadGeneration() {
-        case nil:
-            try marker.replaceGeneration(generation)
-        case let existing? where existing == generation:
-            break
-        case .some:
-            throw OrderedCollectionPersistenceFactoryError.destinationMarkerMismatch
-        }
+        try Self.adoptCommittedGeneration(
+            generation,
+            marker: marker,
+            context: "浏览历史后端",
+            missingMarkerIsRepair: false
+        )
         guard try marker.loadGeneration() == generation else {
             throw OrderedCollectionPersistenceFactoryError.destinationMarkerMismatch
         }
@@ -383,6 +393,36 @@ struct OrderedCollectionPersistenceFactory {
             destinationGeneration: generation
         ))
         return bundle
+    }
+
+    /// Makes the store's own marker agree with the committed manifest.
+    ///
+    /// The manifest is the backend-selection commit point and the marker is
+    /// only the store's copy of the same token. A store whose marker is missing
+    /// or belongs to an earlier database used to leave browsing history, recent
+    /// forums and search history empty for the rest of the install, with no
+    /// recovery and no record of why. Rewriting the marker never touches an
+    /// entry.
+    private static func adoptCommittedGeneration(
+        _ generation: String,
+        marker: any OrderedCollectionBackendMarkerPersistence,
+        context: String,
+        missingMarkerIsRepair: Bool
+    ) throws {
+        guard let existingGeneration = try marker.loadGeneration() else {
+            try marker.replaceGeneration(generation)
+            if missingMarkerIsRepair {
+                PersistenceDiagnostics.note(
+                    "\(context)：数据库缺少后端标记，已按已提交状态重建（未删除任何记录）"
+                )
+            }
+            return
+        }
+        guard existingGeneration != generation else { return }
+        try marker.replaceGeneration(generation)
+        PersistenceDiagnostics.note(
+            "\(context)：数据库标记与已提交状态不一致（库内 \(existingGeneration)，状态 \(generation)），已按状态覆盖（未删除任何记录）"
+        )
     }
 
     private func commitMigrationReceipt(

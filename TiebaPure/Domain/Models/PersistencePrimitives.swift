@@ -56,6 +56,14 @@ enum PersistenceDiagnostics {
         let message = "\(operation)：\(String(describing: error))"
         Task { await AppLog.shared.record(.error, Self.logCategory, message) }
     }
+
+    /// Records a store recovery that is not an error: the app repaired itself,
+    /// and the exported log should still show what was found and what was done.
+    static func note(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+        guard AppLog.isEnabled else { return }
+        Task { await AppLog.shared.record(.warning, Self.logCategory, message) }
+    }
 }
 
 enum LegacyStorageMigration {
