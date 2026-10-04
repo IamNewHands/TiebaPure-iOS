@@ -372,8 +372,8 @@ extension TiebaAPI {
             code: response.errorCode,
             message: response.errorMessage
         )
-        let page = UserProfileMapper.ownRepliesPage(from: response, page: requestedPage)
-        if page.replies.isEmpty {
+        let repliesPage = UserProfileMapper.ownRepliesPage(from: response, page: page)
+        if repliesPage.replies.isEmpty {
             await AppLog.shared.record(
                 .warning,
                 UserProfileRequestFactory.replyFeedLogCategory,
@@ -384,10 +384,10 @@ extension TiebaAPI {
             await AppLog.shared.record(
                 .info,
                 UserProfileRequestFactory.replyFeedLogCategory,
-                "第\(requestedPage)页 主题行 \(response.threads.count) 条 回复 \(page.replies.count) 条"
+                "第\(requestedPage)页 主题行 \(response.threads.count) 条 回复 \(repliesPage.replies.count) 条"
             )
         }
-        return page
+        return repliesPage
     }
 
     func updateOwnProfile(account: Account, request: UserProfileEditRequest) async throws {
