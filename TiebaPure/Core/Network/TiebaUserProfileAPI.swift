@@ -438,31 +438,74 @@ extension TiebaAPI {
     /// The reply's own post ID is the target, and the thread ID is only context:
     /// deleting the thread's first post here would remove the whole thread, so a
     /// reply whose own ID is missing is refused before the request is built.
+    ///
+    /// A delete is the slowest write the app makes — the write token hop alone
+    /// has been measured at twenty seconds — and the service keeps returning the
+    /// reply in its own list for a while afterwards, so where the time went and
+    /// whether the service accepted it are both recorded.
     func deleteOwnReply(account: Account, reply: OwnReply) async throws {
         try Task.checkCancellation()
         try UserProfileRequestFactory.validateReplyDeletionTarget(reply)
-        let tbs = try await refreshedClientTBS(for: account)
-        try Task.checkCancellation()
-        let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
-        let fields = try UserProfileRequestFactory.deletePostFields(
-            account: account,
-            tbs: tbs,
-            reply: reply,
-            requestBuilder: requestBuilder,
-            timestamp: timestamp
-        )
-        let response = try await sendFinalUserProfileMutation(
-            endpoint: .deleteOwnPost,
-            fields: fields,
-            headers: requestBuilder.officialHeaders(
-                baiduID: account.baiduID,
-                clientVersion: UserProfileRequestFactory.ownThreadDeleteClientVersion,
+        let startedAt = Date()
+        var tokenSeconds: TimeInterval = 0
+        do {
+            let tbs = try await refreshedClientTBS(for: account)
+            tokenSeconds = Date().timeIntervalSince(startedAt)
+            try Task.checkCancellation()
+            let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
+            let fields = try UserProfileRequestFactory.deletePostFields(
+                account: account,
+                tbs: tbs,
+                reply: reply,
+                requestBuilder: requestBuilder,
                 timestamp: timestamp
             )
-        )
-        try TiebaResponseValidator.validate(
-            code: response.errorCode,
-            message: response.errorMessage
+            let dispatchedAt = Date()
+            let response = try await sendFinalUserProfileMutation(
+                endpoint: .deleteOwnPost,
+                fields: fields,
+                headers: requestBuilder.officialHeaders(
+                    baiduID: account.baiduID,
+                    clientVersion: UserProfileRequestFactory.ownThreadDeleteClientVersion,
+                    timestamp: timestamp
+                )
+            )
+            try TiebaResponseValidator.validate(
+                code: response.errorCode,
+                message: response.errorMessage
+            )
+            await Self.recordReplyDeletion(
+                reply: reply,
+                tokenSeconds: tokenSeconds,
+                submitSeconds: Date().timeIntervalSince(dispatchedAt),
+                failure: nil
+            )
+        } catch {
+            await Self.recordReplyDeletion(
+                reply: reply,
+                tokenSeconds: tokenSeconds,
+                submitSeconds: nil,
+                failure: ReaderErrorMessage.message(for: error)
+            )
+            throw error
+        }
+    }
+
+    /// The write token and the submit fail for different reasons, so the two hops
+    /// are timed apart instead of as one total.
+    private static func recordReplyDeletion(
+        reply: OwnReply,
+        tokenSeconds: TimeInterval,
+        submitSeconds: TimeInterval?,
+        failure: String?
+    ) async {
+        let token = String(format: "%.1fs", tokenSeconds)
+        let submit = submitSeconds.map { String(format: "%.1fs", $0) } ?? "未发出"
+        await AppLog.shared.record(
+            failure == nil ? .info : .warning,
+            "删除回帖",
+            "pid=\(reply.id) 主题=\(reply.threadID) 取令牌=\(token) 提交=\(submit) 结果="
+                + (failure.map { "失败：\($0)" } ?? "成功")
         )
     }
 

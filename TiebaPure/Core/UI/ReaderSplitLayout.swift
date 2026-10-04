@@ -10,6 +10,10 @@ struct ReaderSplitThreadRoute: Hashable {
     let threadID: Int64
     let forumID: Int64?
     let initialPostID: UInt64?
+    /// A 楼中楼 reply to open at its parent floor. It travels beside
+    /// `initialPostID` because the reply ID is not a floor: the thread screen
+    /// resolves the floor that holds it and highlights the reply itself.
+    let initialSubpostID: UInt64?
     let initialDestination: ThreadDetailInitialDestination?
     let ownThreadDeletionTarget: OwnThreadDeletionTarget?
     let mainPostFallback: ThreadMainPostFallback?
@@ -18,6 +22,7 @@ struct ReaderSplitThreadRoute: Hashable {
         threadID: Int64,
         forumID: Int64?,
         initialPostID: UInt64? = nil,
+        initialSubpostID: UInt64? = nil,
         initialDestination: ThreadDetailInitialDestination? = nil,
         ownThreadDeletionTarget: OwnThreadDeletionTarget? = nil,
         mainPostFallback: ThreadMainPostFallback? = nil
@@ -25,6 +30,7 @@ struct ReaderSplitThreadRoute: Hashable {
         self.threadID = threadID
         self.forumID = forumID
         self.initialPostID = initialPostID
+        self.initialSubpostID = initialSubpostID
         self.initialDestination = initialDestination
         self.ownThreadDeletionTarget = ownThreadDeletionTarget
         self.mainPostFallback = mainPostFallback
@@ -152,6 +158,7 @@ struct ReaderSplitLayout<Route: Hashable, ListColumn: View, DetailRoot: View>: V
                             threadID: route.threadID,
                             forumID: route.forumID,
                             initialPostID: route.initialPostID,
+                            initialSubpostID: route.initialSubpostID,
                             initialDestination: route.initialDestination,
                             ownThreadDeletionTarget: route.ownThreadDeletionTarget,
                             mainPostFallback: route.mainPostFallback

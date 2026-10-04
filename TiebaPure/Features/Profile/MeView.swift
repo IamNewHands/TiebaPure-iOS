@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct MeView: View {
@@ -381,6 +382,65 @@ enum MeNavigationPathPolicy {
     }
 }
 
+/// Replies this session deleted, so a list feed that still returns one cannot put
+/// the row back.
+///
+/// The service keeps answering its own reply feed with a deleted reply for an
+/// unbounded while afterwards, and every re-entry into 我的回帖 reloads from that
+/// feed, which is why a deleted row used to reappear until the service caught up.
+/// The record lives in memory only: it ends with the process, and the next launch
+/// reads whatever the service says by then.
+final class OwnReplyDeletionLedger {
+    static let shared = OwnReplyDeletionLedger()
+
+    private let lock = NSLock()
+    private var deletedIDs: Set<UInt64> = []
+    private var insertionOrder: [UInt64] = []
+    /// Bounded so a long session cannot grow the set without limit.
+    private let capacity: Int
+
+    init(capacity: Int = 200) {
+        self.capacity = max(capacity, 1)
+    }
+
+    func contains(_ id: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return deletedIDs.contains(id)
+    }
+
+    func record(_ id: UInt64) {
+        guard id > 0 else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard deletedIDs.insert(id).inserted else { return }
+        insertionOrder.append(id)
+        while insertionOrder.count > capacity {
+            deletedIDs.remove(insertionOrder.removeFirst())
+        }
+    }
+
+    /// Drops the replies this account already deleted from a freshly loaded page.
+    /// The dropped IDs come back so the caller can report that the service is
+    /// still serving them.
+    func removingDeletedReplies(
+        from replies: [OwnReply]
+    ) -> (visible: [OwnReply], droppedIDs: [UInt64]) {
+        lock.lock()
+        let deleted = deletedIDs
+        lock.unlock()
+        guard deleted.isEmpty == false else { return (replies, []) }
+
+        var droppedIDs: [UInt64] = []
+        let visible = replies.filter { reply in
+            guard deleted.contains(reply.id) else { return true }
+            droppedIDs.append(reply.id)
+            return false
+        }
+        return (visible, droppedIDs)
+    }
+}
+
 /// 我的回帖: every reply this account wrote, each one deletable in place.
 ///
 /// The profile page lists threads only, and the only thing the app could delete
@@ -400,7 +460,7 @@ struct MyRepliesView: View {
     @State private var didLoad = false
     @State private var errorMessage: String?
     @State private var pendingDeletion: OwnReply?
-    @State private var isDeleting = false
+    @State private var deletingReplyID: UInt64?
     @State private var actionError: String?
 
     private var userID: Int64 { Int64(account.uid) ?? 0 }
@@ -446,6 +506,7 @@ struct MyRepliesView: View {
                                     row(reply)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(deletingReplyID != nil)
                                 .accessibilityIdentifier("my-reply-\(reply.id)")
 
                                 // A visible delete control: the row is a
@@ -454,13 +515,11 @@ struct MyRepliesView: View {
                                 Button {
                                     pendingDeletion = reply
                                 } label: {
-                                    Image(systemName: "trash")
-                                        .font(.body)
-                                        .frame(width: 44, height: 44)
-                                        .contentShape(Rectangle())
+                                    deleteControlLabel(for: reply)
                                 }
                                 .buttonStyle(.borderless)
                                 .foregroundStyle(.red)
+                                .disabled(deletingReplyID != nil)
                                 .accessibilityLabel("删除这条回复")
                                 .accessibilityIdentifier("my-reply-delete-\(reply.id)")
                             }
@@ -468,10 +527,18 @@ struct MyRepliesView: View {
                                 Button("删除", role: .destructive) {
                                     pendingDeletion = reply
                                 }
+                                .disabled(deletingReplyID != nil)
                             }
                         }
                     } footer: {
-                        Text("点右侧垃圾桶或左滑一条回复可以删除它。删除只影响这一条回复，不会动主题帖。")
+                        // A delete waits on a write token that has been measured at
+                        // twenty seconds, so the wait is named instead of looking
+                        // like a tap that did nothing.
+                        if deletingReplyID != nil {
+                            Text("正在删除这条回复。贴吧要先换一次写入令牌，网络慢时可能要等半分钟，请不要离开这个页面。")
+                        } else {
+                            Text("点右侧垃圾桶或左滑一条回复可以删除它。删除只影响这一条回复，不会动主题帖。")
+                        }
                     }
 
                     if hasMore {
@@ -562,6 +629,19 @@ struct MyRepliesView: View {
         .contentShape(Rectangle())
     }
 
+    @ViewBuilder
+    private func deleteControlLabel(for reply: OwnReply) -> some View {
+        if deletingReplyID == reply.id {
+            ProgressView()
+                .frame(width: 44, height: 44)
+        } else {
+            Image(systemName: "trash")
+                .font(.body)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
     private func replyPreview(_ reply: OwnReply) -> String {
         let text = reply.body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.isEmpty == false else { return "（无文字内容）" }
@@ -570,17 +650,18 @@ struct MyRepliesView: View {
 
     /// Opens the thread at the reply itself, not just the thread.
     ///
-    /// The reply's own post ID is a floor, so the thread screen loads the page
-    /// holding it and scrolls there. A 楼中楼 reply's ID is not a floor — the
-    /// feed reports `post_type = 1` for those — so it opens the thread without a
-    /// target rather than asking for a floor that does not exist.
+    /// A floor reply's own post ID is a floor, so the thread screen loads the page
+    /// holding it and scrolls there. A 楼中楼 reply's ID is not a floor — the feed
+    /// reports `post_type = 1` for those — so it travels as a 楼中楼 target and the
+    /// thread screen resolves the parent floor and rings the reply itself.
     private func openThread(_ reply: OwnReply) {
         guard reply.threadID > 0 else { return }
         openThreadInParent(
             ReaderSplitThreadRoute(
                 threadID: reply.threadID,
                 forumID: reply.forumID > 0 ? reply.forumID : nil,
-                initialPostID: reply.isSubpost ? nil : reply.id
+                initialPostID: reply.isSubpost ? nil : reply.id,
+                initialSubpostID: reply.isSubpost ? reply.id : nil
             )
         )
     }
@@ -614,11 +695,22 @@ struct MyRepliesView: View {
                 page: requestedPage
             )
             visibility = page.visibility
+            let (visibleReplies, stillServedIDs) = OwnReplyDeletionLedger.shared
+                .removingDeletedReplies(from: page.replies)
+            if stillServedIDs.isEmpty == false {
+                // Evidence, not noise: it says the service is still listing a reply
+                // this account already deleted, which is the lag the ledger hides.
+                await AppLog.shared.record(
+                    .warning,
+                    "删除回帖",
+                    "列表仍返回已删除的 pid=\(stillServedIDs.map(String.init).joined(separator: ","))，已在本机隐藏"
+                )
+            }
             if replacing {
-                replies = page.replies
+                replies = visibleReplies
             } else {
                 var seen = Set(replies.map(\.id))
-                for reply in page.replies where seen.insert(reply.id).inserted {
+                for reply in visibleReplies where seen.insert(reply.id).inserted {
                     replies.append(reply)
                 }
             }
@@ -632,12 +724,17 @@ struct MyRepliesView: View {
     }
 
     private func delete(_ reply: OwnReply) async {
-        guard isDeleting == false else { return }
-        isDeleting = true
+        guard deletingReplyID == nil else { return }
+        deletingReplyID = reply.id
         pendingDeletion = nil
-        defer { isDeleting = false }
+        defer { deletingReplyID = nil }
         do {
             try await environment.api.deleteOwnReply(account: account, reply: reply)
+            // Removing the row here is not enough on its own: the service's reply
+            // feed keeps returning a just-deleted reply for a while, and every
+            // re-entry reloads from it, so the deletion is remembered for this
+            // session as well.
+            OwnReplyDeletionLedger.shared.record(reply.id)
             replies.removeAll { $0.id == reply.id }
         } catch {
             actionError = ReaderErrorMessage.message(for: error)

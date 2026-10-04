@@ -15,6 +15,9 @@ struct ThreadDetailView: View {
     let threadID: Int64
     let forumID: Int64?
     let initialPostID: UInt64?
+    /// A 楼中楼 reply to open at its parent floor. It is not a floor itself, so
+    /// the floor that holds it is resolved after the first page lands.
+    let initialSubpostID: UInt64?
     let initialDestination: ThreadDetailInitialDestination?
     private let mainPostFallback: ThreadMainPostFallback?
     private let ownThreadDeletionTarget: OwnThreadDeletionTarget?
@@ -48,6 +51,9 @@ struct ThreadDetailView: View {
     @State private var isStandaloneSearchPresented = false
     @State private var didCopyLink = false
     @State private var pendingInitialPostID: UInt64?
+    @State private var didResolveInitialSubpost = false
+    @State private var highlightedPostID: UInt64?
+    @State private var highlightClearTask: Task<Void, Never>?
     @State private var pendingInitialDestination: ThreadDetailInitialDestination?
     @State private var initialDestinationScrollRequest = 0
     @State private var isReplyDestinationTargetReady = false
@@ -101,6 +107,7 @@ struct ThreadDetailView: View {
         threadID: Int64,
         forumID: Int64? = nil,
         initialPostID: UInt64? = nil,
+        initialSubpostID: UInt64? = nil,
         initialDestination: ThreadDetailInitialDestination? = nil,
         ownThreadDeletionTarget: OwnThreadDeletionTarget? = nil,
         mainPostFallback: ThreadMainPostFallback? = nil,
@@ -114,6 +121,7 @@ struct ThreadDetailView: View {
         self.threadID = threadID
         self.forumID = forumID
         self.initialPostID = initialPostID
+        self.initialSubpostID = initialSubpostID
         self.initialDestination = initialDestination
         self.mainPostFallback = mainPostFallback
         self.ownThreadDeletionTarget = ownThreadDeletionTarget
@@ -388,6 +396,9 @@ struct ThreadDetailView: View {
         guard didLoad == false else { return }
         applyDefaultReplySortIfNeeded()
         await reload()
+        // The reply feed identifies a 楼中楼 only by its own post ID, which is not
+        // a floor, so the parent floor is looked up once the first page has landed.
+        await locateInitialSubpostIfNeeded()
     }
 
     private func resetForAccountChange() {
@@ -424,6 +435,8 @@ struct ThreadDetailView: View {
         showsInlineRefreshAnimation = false
         pendingInitialPostID = initialPostID
         pendingInitialDestination = initialDestination
+        didResolveInitialSubpost = false
+        cancelPostHighlight()
         savedReadingPosition = nil
         didResolveSavedReadingPosition = false
         isResumingReadingPosition = false
@@ -591,6 +604,7 @@ struct ThreadDetailView: View {
                 )
                 .equatable()
                 .padding(.bottom, TiebaPureTheme.Spacing.xs)
+                .readerTargetHighlight(highlightedPostID == mainPost.id)
                 .threadPreciseScrollAnchor(
                     post: mainPost,
                     isEnabled: preciseScrollSession?.postID == mainPost.id
@@ -664,6 +678,7 @@ struct ThreadDetailView: View {
                         : nil
                 )
                 .equatable()
+                .readerTargetHighlight(highlightedPostID == post.id)
                 .threadPreciseScrollAnchor(
                     post: post,
                     isEnabled: preciseScrollSession?.postID == post.id
@@ -1458,6 +1473,7 @@ struct ThreadDetailView: View {
         guard didResolveSavedReadingPosition == false else { return }
         didResolveSavedReadingPosition = true
         guard initialPostID == nil,
+              initialSubpostID == nil,
               initialDestination == nil,
               pendingInitialPostID == nil,
               let position = localThreadLibraryStore.position(for: threadID) else { return }
@@ -1476,7 +1492,7 @@ struct ThreadDetailView: View {
         didApplyDefaultReplySort = true
         sortType = ThreadInitialReplySortPolicy.resolve(
             defaultReplySort: readingPreferences.defaultReplySort,
-            initialPostID: initialPostID
+            initialPostID: initialPostID ?? initialSubpostID
         )
     }
 
@@ -1511,6 +1527,112 @@ struct ThreadDetailView: View {
     private func requestScroll(to postID: UInt64) {
         guard postID > 0 else { return }
         scrollRequest = ThreadPostScrollRequest(id: UUID(), postID: postID)
+    }
+
+    /// Opens the reader at the floor that holds a 楼中楼 reply, highlights that
+    /// floor, and opens the reply itself inside its 楼中楼 sheet.
+    ///
+    /// The reply feed carries no parent floor, so the loaded page is searched
+    /// first — a floor's payload previews its own 楼中楼 — and only a miss asks
+    /// the service which floor owns the reply. A floor the service names but the
+    /// page does not hold is fetched once by post ID before giving up, and giving
+    /// up only means the thread stays where it opened.
+    private func locateInitialSubpostIfNeeded() async {
+        guard didResolveInitialSubpost == false,
+              let target = initialSubpostID,
+              target > 0 else { return }
+        didResolveInitialSubpost = true
+
+        if let floorPost = postHoldingSubpost(target) {
+            await presentLocatedSubpost(target, floorPost: floorPost, source: "本页预览")
+            return
+        }
+
+        guard let resolvedForumID else {
+            await AppLog.shared.record(.warning, "楼中楼定位", "pid=\(target) 未定位：缺少贴吧 ID")
+            return
+        }
+
+        let location: SubpostLocation?
+        do {
+            location = try await environment.api.subpostLocation(
+                account: account,
+                threadID: threadID,
+                forumID: resolvedForumID,
+                subpostID: target
+            )
+        } catch {
+            await AppLog.shared.record(
+                .warning,
+                "楼中楼定位",
+                "pid=\(target) 未定位：\(ReaderErrorMessage.message(for: error))"
+            )
+            return
+        }
+        guard let location else {
+            await AppLog.shared.record(.warning, "楼中楼定位", "pid=\(target) 未定位：服务端没有给出父楼层")
+            return
+        }
+        guard Task.isCancelled == false else { return }
+
+        if let floorPost = post(withID: location.floorPostID) {
+            await presentLocatedSubpost(target, floorPost: floorPost, source: "服务端")
+            return
+        }
+
+        pendingInitialPostID = location.floorPostID
+        await reload()
+        guard Task.isCancelled == false else { return }
+        guard let floorPost = post(withID: location.floorPostID) else {
+            await AppLog.shared.record(
+                .warning,
+                "楼中楼定位",
+                "pid=\(target) 父楼层=\(location.floorPostID) 不在该页"
+            )
+            return
+        }
+        await presentLocatedSubpost(target, floorPost: floorPost, source: "服务端取页")
+    }
+
+    /// The floor whose payload already previews this 楼中楼 reply.
+    private func postHoldingSubpost(_ subpostID: UInt64) -> Post? {
+        let candidates = posts + [mainPost].compactMap { $0 }
+        return candidates.first { post in
+            post.previewSubposts.contains { $0.id == subpostID }
+        }
+    }
+
+    private func post(withID postID: UInt64) -> Post? {
+        if mainPost?.id == postID { return mainPost }
+        return posts.first { $0.id == postID }
+    }
+
+    private func presentLocatedSubpost(
+        _ subpostID: UInt64,
+        floorPost: Post,
+        source: String
+    ) async {
+        requestScroll(to: floorPost.id)
+        highlightedPostID = floorPost.id
+        highlightClearTask?.cancel()
+        highlightClearTask = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard Task.isCancelled == false else { return }
+            highlightedPostID = nil
+        }
+        selectedSubpostPost = floorPost
+        pendingSubpostInitialID = subpostID
+        await AppLog.shared.record(
+            .info,
+            "楼中楼定位",
+            "pid=\(subpostID) 父楼层=\(floorPost.id) 第\(floorPost.floor)楼 来源=\(source)"
+        )
+    }
+
+    private func cancelPostHighlight() {
+        highlightClearTask?.cancel()
+        highlightClearTask = nil
+        highlightedPostID = nil
     }
 
     private func requestInitialDestinationScrollIfReady() {
@@ -2808,6 +2930,10 @@ private struct SubpostListSheet: View {
     @State private var composerRoute: ContentComposerRoute?
     @State private var contentActionError: String?
     @State private var pendingSubmittedSubpostID: UInt64?
+    /// The 楼中楼 the sheet was opened at, ringed for a few seconds so a jump from
+    /// a reply list lands on something visible rather than just a loaded page.
+    @State private var highlightedSubpostID: UInt64?
+    @State private var highlightClearTask: Task<Void, Never>?
     @State private var hasPendingSubmission = false
     @State private var pendingSubmissionAccount: Account?
     @State private var pendingSubmissionRouteID: UUID?
@@ -2833,6 +2959,7 @@ private struct SubpostListSheet: View {
         self.onInteractiveDismiss = onInteractiveDismiss
         _post = State(initialValue: post)
         _pendingSubmittedSubpostID = State(initialValue: initialSubpostID)
+        _highlightedSubpostID = State(initialValue: initialSubpostID)
     }
 
     var body: some View {
@@ -2931,6 +3058,7 @@ private struct SubpostListSheet: View {
                                         ? { openSubpostReplyComposer(subpost) }
                                         : nil
                                 )
+                                    .readerTargetHighlight(highlightedSubpostID == subpost.id)
                                     .onAppear {
                                         guard PaginationPrefetchPolicy.shouldLoadMore(
                                             currentIndex: index,
@@ -3059,6 +3187,7 @@ private struct SubpostListSheet: View {
                 }
             }
             .task {
+                scheduleSubpostHighlightClear()
                 guard didLoad == false else { return }
                 await reload()
             }
@@ -3180,6 +3309,19 @@ private struct SubpostListSheet: View {
                 subpost: subpost
             )
         )
+    }
+
+    /// The ring is a landing marker, not a state: it fades on its own so a sheet
+    /// opened again later does not keep claiming one reply is special.
+    private func scheduleSubpostHighlightClear() {
+        guard let highlightedSubpostID else { return }
+        highlightClearTask?.cancel()
+        highlightClearTask = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard Task.isCancelled == false,
+                  self.highlightedSubpostID == highlightedSubpostID else { return }
+            self.highlightedSubpostID = nil
+        }
     }
 
     private func openUser(_ user: UserSummary) {

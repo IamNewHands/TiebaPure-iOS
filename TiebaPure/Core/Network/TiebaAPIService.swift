@@ -36,6 +36,14 @@ protocol TiebaAPIService {
         page: Int,
         subpostID: UInt64
     ) async throws -> [Subpost]
+    /// The floor that owns a 楼中楼 reply. A 楼中楼 reply ID is not a floor, so a
+    /// reader that was handed one needs the parent floor before it can scroll.
+    func subpostLocation(
+        account: Account?,
+        threadID: Int64,
+        forumID: Int64,
+        subpostID: UInt64
+    ) async throws -> SubpostLocation?
     func userProfile(account: Account?, user: UserSummary) async throws -> UserProfile
     func userThreads(account: Account?, userID: Int64, page: Int) async throws -> UserThreadsPage
     /// The signed-in account's own replies (本人回帖), served by the same
@@ -243,6 +251,18 @@ extension TiebaAPIService {
             page: page,
             subpostID: subpostID
         )
+    }
+
+    /// A service that cannot resolve a 楼中楼 leaves the target unresolved, which
+    /// only means the thread opens without a floor to scroll to; it never fails
+    /// the screen the reader came from.
+    func subpostLocation(
+        account: Account?,
+        threadID: Int64,
+        forumID: Int64,
+        subpostID: UInt64
+    ) async throws -> SubpostLocation? {
+        nil
     }
 }
 

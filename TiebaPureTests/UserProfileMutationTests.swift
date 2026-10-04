@@ -596,6 +596,93 @@ final class UserProfileMutationTests: XCTestCase {
         XCTAssertEqual(page.replies[0].body, "第一条回复")
     }
 
+    func testSubpostLocationResolvesTheParentFloorOfAReply() async throws {
+        let harness = makeAPI(mode: .finalResponse(
+            try Self.subpostFloorResponse(floorPostID: 3001, floor: 7)
+        ))
+        defer { ProfileMutationURLProtocol.remove(id: harness.id) }
+
+        let location = try await harness.api.subpostLocation(
+            account: Self.account,
+            threadID: 1001,
+            forumID: 73,
+            subpostID: 2002
+        )
+
+        XCTAssertEqual(location?.floorPostID, 3001, "楼中楼要跳到父楼层，不是它自己的 ID")
+        XCTAssertEqual(location?.floor, 7)
+        XCTAssertEqual(
+            ProfileMutationURLProtocol.records(id: harness.id).map(\.path),
+            ["/c/f/pb/floor"],
+            "定位只查一次楼层接口，不取 tbs、也不发任何写请求"
+        )
+    }
+
+    func testSubpostLocationRejectsAnAnswerThatEchoesTheReplyItself() async throws {
+        let harness = makeAPI(mode: .finalResponse(
+            try Self.subpostFloorResponse(floorPostID: 2002, floor: 0)
+        ))
+        defer { ProfileMutationURLProtocol.remove(id: harness.id) }
+
+        let location = try await harness.api.subpostLocation(
+            account: Self.account,
+            threadID: 1001,
+            forumID: 73,
+            subpostID: 2002
+        )
+
+        XCTAssertNil(location, "把楼中楼 ID 原样答回来时，这个 ID 不能当成可跳转的楼层")
+    }
+
+    func testSubpostLocationSkipsTheRequestWithoutAForumToAskAbout() async throws {
+        let harness = makeAPI(mode: .success)
+        defer { ProfileMutationURLProtocol.remove(id: harness.id) }
+
+        let location = try await harness.api.subpostLocation(
+            account: Self.account,
+            threadID: 1001,
+            forumID: 0,
+            subpostID: 2002
+        )
+
+        XCTAssertNil(location)
+        XCTAssertTrue(
+            ProfileMutationURLProtocol.records(id: harness.id).isEmpty,
+            "缺少贴吧 ID 时不能拿一个注定失败的请求去换一次等待"
+        )
+    }
+
+    func testDeletionLedgerHidesADeletedReplyAndStaysBounded() {
+        let ledger = OwnReplyDeletionLedger(capacity: 2)
+        var second = Self.reply
+        second.id = 2002
+        var third = Self.reply
+        third.id = 2003
+
+        XCTAssertFalse(ledger.contains(Self.reply.id))
+        ledger.record(Self.reply.id)
+        ledger.record(second.id)
+
+        let hidden = ledger.removingDeletedReplies(from: [Self.reply, second, third])
+        XCTAssertEqual(hidden.visible.map(\.id), [third.id], "已删除的回帖不能再出现在列表里")
+        XCTAssertEqual(hidden.droppedIDs.sorted(), [Self.reply.id, second.id])
+
+        ledger.record(third.id)
+        XCTAssertFalse(ledger.contains(Self.reply.id), "超出容量后要丢掉最旧的记录，集合不能无限增长")
+        XCTAssertTrue(ledger.contains(third.id))
+    }
+
+    private static func subpostFloorResponse(floorPostID: UInt64, floor: UInt32) throws -> Data {
+        var post = Tieba_Post()
+        post.id = floorPostID
+        post.floor = floor
+        var data = Tieba_PbFloor_PbFloorResponseData()
+        data.post = post
+        var response = Tieba_PbFloor_PbFloorResponse()
+        response.data = data
+        return try response.serializedData()
+    }
+
     func testDeleteOwnReplyRefreshesTBSThenPostsToDelpost() async throws {
         let harness = makeAPI(mode: .success)
         defer { ProfileMutationURLProtocol.remove(id: harness.id) }
@@ -1489,6 +1576,14 @@ private final class ProfileMutationURLProtocol: URLProtocol {
             respond(Data(#"{"error_code":"0","anti":{"tbs":"fresh-tbs"}}"#.utf8))
         case "/c/u/feed/userpost":
             respond(Data(profileMutationReplyFeedJSON.utf8))
+        case "/c/f/pb/floor":
+            // The floor lookup that turns a 楼中楼 reply ID into its parent floor.
+            switch mode {
+            case .finalResponse(let data):
+                respond(data)
+            default:
+                respond(Data(#"{"error_code":0,"error_msg":""}"#.utf8))
+            }
         case "/c/c/profile/modify", "/c/c/bawu/delthread", "/c/c/bawu/delpost":
             switch mode {
             case .success:

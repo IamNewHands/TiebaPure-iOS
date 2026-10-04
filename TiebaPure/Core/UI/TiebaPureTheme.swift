@@ -53,6 +53,21 @@ extension View {
         frame(minWidth: 44, minHeight: 44)
     }
 
+    /// Marks the floor or 楼中楼 a jump landed on. A ring rather than a fill, so
+    /// the row keeps its own background and stays readable in either appearance.
+    func readerTargetHighlight(_ isHighlighted: Bool) -> some View {
+        overlay {
+            if isHighlighted {
+                RoundedRectangle(
+                    cornerRadius: TiebaPureTheme.Radius.card,
+                    style: .continuous
+                )
+                .stroke(TiebaPureTheme.ColorToken.primaryAccent, lineWidth: 2)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
 }
 
 enum PaginationPrefetchPolicy {

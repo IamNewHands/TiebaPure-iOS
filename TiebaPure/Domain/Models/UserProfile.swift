@@ -117,6 +117,18 @@ struct OwnRepliesPage: Equatable, Sendable {
     var visibility: UserContentVisibility
 }
 
+/// The floor that owns a 楼中楼 reply.
+///
+/// A 楼中楼 reply is identified by its own post ID, which is not a floor, and
+/// the reply feed carries no parent floor with it. The thread screen therefore
+/// asks the service which floor holds the reply before it can scroll there.
+struct SubpostLocation: Equatable, Sendable {
+    /// The floor post that holds the reply, which is what a reader can scroll to.
+    var floorPostID: UInt64
+    /// The 1-based floor number as the service reports it; 0 when it did not say.
+    var floor: Int
+}
+
 enum UserProfileManagementPolicy {
     static func canEdit(profile: UserProfile, account: Account?) -> Bool {
         guard profile.isCurrentUser, let account else { return false }
