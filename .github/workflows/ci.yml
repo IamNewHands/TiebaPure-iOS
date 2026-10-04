@@ -196,12 +196,18 @@ jobs:
             -only-testing:TiebaPureUITests/TiebaPureUITests/testIPadLandscapeReaderListUsesAvailableWidth \
             -retry-tests-on-failure
 
-  # Release build and the unsigned IPA only run on events that actually
-  # produce an artifact (tag / release / manual dispatch). Plain pushes to
-  # main just run the test lanes above, which keeps the common path fast.
+  # Release build and the unsigned IPA run for every push to main as well as
+  # for tags, releases and manual dispatches. Pushing first and only then
+  # tagging or dispatching produced the same IPA from a second full run, which
+  # doubled the wait for one commit; the packaging lane is the last one anyway,
+  # so the common path now costs no extra wall clock.
   release-artifact:
     name: Release build + unsigned IPA
-    if: github.ref_type == 'tag' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.ref_type == 'tag'
+      || github.event_name == 'release'
+      || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [unit-tests, ui-tests-iphone, ui-tests-ipad]
     runs-on: macos-26
     timeout-minutes: 40
