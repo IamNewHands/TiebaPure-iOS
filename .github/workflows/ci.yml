@@ -92,15 +92,35 @@ jobs:
 
       - name: Unit tests
         run: |
+          rm -rf "$RUNNER_TEMP/TiebaPureTests.xcresult"
           xcodebuild -project TiebaPure.xcodeproj -scheme TiebaPure \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             -parallel-testing-enabled YES \
+            -resultBundlePath "$RUNNER_TEMP/TiebaPureTests.xcresult" \
             -quiet \
             test -only-testing:TiebaPureTests \
             -skip-testing:TiebaPureTests/AnonymousLiveSmokeTests \
             -retry-tests-on-failure
+
+      # `-quiet` keeps the log readable but also hides every assertion message,
+      # so a failing unit test could only be named, never explained. This prints
+      # the failure text out of the result bundle the run just wrote.
+      - name: Summarize unit test failures
+        if: failure()
+        run: |
+          BUNDLE="$RUNNER_TEMP/TiebaPureTests.xcresult"
+          if [ ! -d "$BUNDLE" ]; then
+            echo "No result bundle at $BUNDLE"
+            exit 0
+          fi
+          echo "--- failing test nodes"
+          xcrun xcresulttool get test-results tests --path "$BUNDLE" --format json 2>/dev/null \
+            | tr ',' '\n' | grep -E '"(name|failureText|result)"' | grep -B2 -A2 'Failed' | head -80 || true
+          echo "--- assertion messages"
+          xcrun xcresulttool get test-results tests --path "$BUNDLE" --format json 2>/dev/null \
+            | tr ',' '\n' | grep -E 'XCTAssert|XCTFail|is not equal|failed' | head -60 || true
 
       - name: Verify iOS 16 compatibility linkage
         run: |

@@ -191,30 +191,33 @@ final class ContentDraftTests: XCTestCase {
         let firstTarget = makeTarget(threadID: 100)
         let secondTarget = makeTarget(threadID: 200)
 
-        XCTAssertTrue(store.save(
+        // Written through the same path the editor uses. The list is read back
+        // through the record actor, which only ever sees drafts written the way
+        // the app writes them.
+        try await store.saveAsync(
             accountID: "account-a",
             target: firstTarget,
             title: "A1",
             body: "first",
             images: [],
             updatedAt: Date(timeIntervalSince1970: 10)
-        ))
-        XCTAssertTrue(store.save(
+        )
+        try await store.saveAsync(
             accountID: "account-a",
             target: secondTarget,
             title: "A2",
             body: "second",
             images: [],
             updatedAt: Date(timeIntervalSince1970: 20)
-        ))
-        XCTAssertTrue(store.save(
+        )
+        try await store.saveAsync(
             accountID: "account-b",
             target: firstTarget,
             title: "B1",
             body: "third",
             images: [],
             updatedAt: Date(timeIntervalSince1970: 30)
-        ))
+        )
 
         let summaries = try await store.summaries(accountID: "account-a")
 
