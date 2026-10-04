@@ -141,6 +141,12 @@ enum ContentDraftImageBlobCodec {
     private static let maximumUUIDBytes = 64
     private static let maximumMIMETypeBytes = 128
 
+    /// Bytes an encoded container costs before the first attachment. A draft
+    /// saved without images still carries this header, so "the blob is not
+    /// empty" cannot answer "does this draft have attachments" — 我的草稿 would
+    /// label every text-only draft as carrying pictures.
+    static let emptyContainerByteCount = headerSize
+
     static func encode(_ images: [ContentSubmissionImage]) throws -> Data {
         var blob = Data()
         blob.append(magic)
@@ -1337,7 +1343,9 @@ final class ContentDraftStore {
                     title: record.title,
                     body: record.body,
                     updatedAt: record.updatedAt,
-                    attachmentByteCount: entry.imagesByteCount
+                    attachmentByteCount: entry.imagesByteCount,
+                    hasAttachments: entry.imagesByteCount
+                        > ContentDraftImageBlobCodec.emptyContainerByteCount
                 )
             )
         }
@@ -1358,12 +1366,19 @@ struct ContentDraftSummary: Identifiable, Equatable, Sendable {
     let title: String
     let body: String
     let updatedAt: Date
-    /// Encoded attachment size. The list never decodes the images themselves.
+    /// Encoded attachment size, header included. The list never decodes the
+    /// images themselves.
     let attachmentByteCount: Int
+    /// Whether the draft actually carries at least one attachment, which the
+    /// raw byte count cannot say: an empty container is still a valid blob.
+    let hasAttachments: Bool
 
     var id: String { "\(accountID)\u{1f}\(target.draftKey)" }
 
-    var hasAttachments: Bool { attachmentByteCount > 0 }
+    /// Attachment bytes without the container header, for display only.
+    var attachmentPayloadByteCount: Int {
+        max(attachmentByteCount - ContentDraftImageBlobCodec.emptyContainerByteCount, 0)
+    }
 
     /// The same label the editor shows for this target.
     var prompt: String { target.prompt }

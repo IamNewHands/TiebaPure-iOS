@@ -227,7 +227,15 @@ final class ContentDraftTests: XCTestCase {
         XCTAssertEqual(summaries[0].body, "second")
         XCTAssertEqual(summaries[0].updatedAt, Date(timeIntervalSince1970: 20))
         XCTAssertEqual(summaries[0].prompt, secondTarget.prompt)
-        XCTAssertFalse(summaries[0].hasAttachments)
+        XCTAssertFalse(
+            summaries[0].hasAttachments,
+            "没有图片的草稿仍带着 8 字节空容器头部，不能因此算成有附件"
+        )
+        XCTAssertEqual(
+            summaries[0].attachmentByteCount,
+            ContentDraftImageBlobCodec.emptyContainerByteCount
+        )
+        XCTAssertEqual(summaries[0].attachmentPayloadByteCount, 0)
     }
 
     @MainActor
@@ -248,6 +256,11 @@ final class ContentDraftTests: XCTestCase {
         XCTAssertEqual(summaries.count, 1)
         XCTAssertTrue(summaries[0].hasAttachments, "带图片的草稿要在列表里标出来")
         XCTAssertGreaterThan(summaries[0].attachmentByteCount, 0)
+        XCTAssertGreaterThan(
+            summaries[0].attachmentPayloadByteCount,
+            0,
+            "展示的附件大小要扣掉容器头部"
+        )
 
         XCTAssertTrue(store.delete(accountID: "account", target: target))
         summaries = try await store.summaries(accountID: "account")

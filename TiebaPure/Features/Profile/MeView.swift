@@ -789,7 +789,7 @@ struct MyDraftsView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if draft.hasAttachments {
-                Text("含图片附件（\(byteCountText(draft.attachmentByteCount))）")
+                Text("含图片附件（\(byteCountText(draft.attachmentPayloadByteCount))）")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
