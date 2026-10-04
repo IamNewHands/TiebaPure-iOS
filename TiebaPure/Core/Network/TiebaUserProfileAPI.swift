@@ -8,6 +8,10 @@ struct UserProfileRequestContext {
 
 enum UserProfileRequestFactory {
     static let ownThreadDeleteClientVersion = "12.25.1.0"
+    /// The mini/subapp client version the JSON reply feed answers to.
+    static let ownPostClientVersion = "7.2.0.0"
+    /// Category for the reply feed's own entries in 设置 → 诊断日志.
+    static let replyFeedLogCategory = "本人回帖"
 
     static func profileRequest(
         account: Account?,
@@ -158,6 +162,59 @@ enum UserProfileRequestFactory {
             throw UserProfileMutationError.invalidFirstPostID
         }
     }
+
+    /// Fields for deleting one of the account's own replies.
+    ///
+    /// The endpoint is the post twin of `delthread`: the same signed common
+    /// fields, but the reply's own post ID in `pid` (`z` stays the thread) and
+    /// `delete_my_post = 1` to declare that the author is deleting their own
+    /// reply rather than a moderator removing someone else's.
+    static func deletePostFields(
+        account: Account,
+        tbs: String,
+        reply: OwnReply,
+        requestBuilder: TiebaRequestBuilder,
+        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1_000)
+    ) throws -> [String: String] {
+        try validateReplyDeletionTarget(reply)
+        let resolvedTBS = tbs.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard resolvedTBS.isEmpty == false else {
+            throw UserProfileAPIError.missingTBS
+        }
+        var fields = requestBuilder.officialCommonFields(
+            bduss: account.bduss,
+            baiduID: account.baiduID,
+            clientVersion: ownThreadDeleteClientVersion,
+            timestamp: timestamp
+        )
+        fields.merge([
+            "delete_my_post": "1",
+            "fid": "\(reply.forumID)",
+            "is_vipdel": "0",
+            "isfloor": "0",
+            "pid": "\(reply.id)",
+            "src": "1",
+            "tbs": resolvedTBS,
+            "word": reply.forumName.trimmingCharacters(in: .whitespacesAndNewlines),
+            "z": "\(reply.threadID)"
+        ], uniquingKeysWith: { _, new in new })
+        return fields
+    }
+
+    static func validateReplyDeletionTarget(_ reply: OwnReply) throws {
+        guard reply.forumID > 0 else {
+            throw UserProfileMutationError.invalidForumID
+        }
+        guard reply.forumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            throw UserProfileMutationError.invalidForumName
+        }
+        guard reply.threadID > 0 else {
+            throw UserProfileMutationError.invalidThreadID
+        }
+        guard reply.id > 0 else {
+            throw UserProfileMutationError.invalidReplyID
+        }
+    }
 }
 
 enum UserProfileAPIError: Error, Equatable, CustomStringConvertible {
@@ -186,6 +243,7 @@ enum UserProfileMutationError: Error, Equatable, CustomStringConvertible {
     case invalidForumName
     case invalidThreadID
     case invalidFirstPostID
+    case invalidReplyID
     case outcomeUnknown
     case unsupportedByService
 
@@ -201,6 +259,8 @@ enum UserProfileMutationError: Error, Equatable, CustomStringConvertible {
             return "主题 ID 无效，无法删除主题。"
         case .invalidFirstPostID:
             return "缺少主题首帖 ID，无法确认删除目标。"
+        case .invalidReplyID:
+            return "缺少回复 ID，无法删除这条回复。"
         case .outcomeUnknown:
             return "请求已经发出，但未能确认贴吧是否处理成功。请刷新后再决定是否重试。"
         case .unsupportedByService:
@@ -271,6 +331,65 @@ extension TiebaAPI {
         return UserProfileMapper.threadsPage(from: response, page: page)
     }
 
+    /// The account's own replies (本人回帖).
+    ///
+    /// Same path as `userThreads`, but the JSON/mini form with `is_thread = 0`:
+    /// the reply list lives in `post_list[].content[]`, which the committed
+    /// protobuf schema has no field for, so the protobuf form can only ever
+    /// report thread-level rows. An empty `post_list` with `error_code = 0` is a
+    /// server-side answer, not a decode failure, so it is logged as such.
+    func userReplies(account: Account?, userID: Int64, page: Int) async throws -> OwnRepliesPage {
+        guard userID > 0 else { throw UserProfileAPIError.missingUserIdentifier }
+        let requestedPage = try TiebaRequestValuePolicy.unsignedPage(page)
+        let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
+        var fields = requestBuilder.officialCommonFields(
+            bduss: account?.bduss,
+            baiduID: account?.baiduID,
+            clientVersion: UserProfileRequestFactory.ownPostClientVersion,
+            timestamp: timestamp
+        )
+        fields.merge([
+            "is_thread": "0",
+            "need_content": "1",
+            "pn": "\(requestedPage)",
+            "rn": "20",
+            "subapp_type": "mini",
+            "uid": "\(userID)"
+        ], uniquingKeysWith: { _, new in new })
+
+        let response = try await client.postForm(
+            .userPosts,
+            fields: fields,
+            headers: requestBuilder.officialHeaders(
+                baiduID: account?.baiduID,
+                clientVersion: UserProfileRequestFactory.ownPostClientVersion,
+                timestamp: timestamp
+            ),
+            signingSecret: "tiebaclient!!!",
+            as: UserPostFeedDTO.self
+        )
+        try TiebaResponseValidator.validate(
+            code: response.errorCode,
+            message: response.errorMessage
+        )
+        let page = UserProfileMapper.ownRepliesPage(from: response, page: requestedPage)
+        if page.replies.isEmpty {
+            await AppLog.shared.record(
+                .warning,
+                UserProfileRequestFactory.replyFeedLogCategory,
+                "第\(requestedPage)页 error_code=0 但 post_list 里没有任何回复"
+                    + "（主题行 \(response.threads.count) 条）：接口可能不再返回本人回帖，见该页原始结构"
+            )
+        } else {
+            await AppLog.shared.record(
+                .info,
+                UserProfileRequestFactory.replyFeedLogCategory,
+                "第\(requestedPage)页 主题行 \(response.threads.count) 条 回复 \(page.replies.count) 条"
+            )
+        }
+        return page
+    }
+
     func updateOwnProfile(account: Account, request: UserProfileEditRequest) async throws {
         let fields = try UserProfileRequestFactory.profileEditFields(
             account: account,
@@ -301,6 +420,39 @@ extension TiebaAPI {
         )
         let response = try await sendFinalUserProfileMutation(
             endpoint: .deleteOwnThread,
+            fields: fields,
+            headers: requestBuilder.officialHeaders(
+                baiduID: account.baiduID,
+                clientVersion: UserProfileRequestFactory.ownThreadDeleteClientVersion,
+                timestamp: timestamp
+            )
+        )
+        try TiebaResponseValidator.validate(
+            code: response.errorCode,
+            message: response.errorMessage
+        )
+    }
+
+    /// Deletes one of the account's own replies.
+    ///
+    /// The reply's own post ID is the target, and the thread ID is only context:
+    /// deleting the thread's first post here would remove the whole thread, so a
+    /// reply whose own ID is missing is refused before the request is built.
+    func deleteOwnReply(account: Account, reply: OwnReply) async throws {
+        try Task.checkCancellation()
+        try UserProfileRequestFactory.validateReplyDeletionTarget(reply)
+        let tbs = try await refreshedClientTBS(for: account)
+        try Task.checkCancellation()
+        let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
+        let fields = try UserProfileRequestFactory.deletePostFields(
+            account: account,
+            tbs: tbs,
+            reply: reply,
+            requestBuilder: requestBuilder,
+            timestamp: timestamp
+        )
+        let response = try await sendFinalUserProfileMutation(
+            endpoint: .deleteOwnPost,
             fields: fields,
             headers: requestBuilder.officialHeaders(
                 baiduID: account.baiduID,
@@ -448,5 +600,126 @@ private func strictUserProfileMutationInteger(_ value: Any) throws -> Int {
         return integer
     default:
         throw UserProfileMutationError.outcomeUnknown
+    }
+}
+
+/// The JSON (mini/subapp) shape of `/c/u/feed/userpost`.
+///
+/// One `post_list` row per thread, with the account's own replies nested under
+/// `content`: the protobuf shape has a field for the thread but none for those
+/// replies, which is why this feed is read as JSON.
+struct UserPostFeedDTO: Decodable {
+    struct ContentDTO: Decodable {
+        var text: String
+
+        enum CodingKeys: String, CodingKey {
+            case text
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            text = container.flexibleString(forKey: .text)
+        }
+    }
+
+    struct ReplyDTO: Decodable {
+        var postID: UInt64
+        var createTime: Int
+        var contents: [ContentDTO]
+
+        enum CodingKeys: String, CodingKey {
+            case postID = "post_id"
+            case createTime = "create_time"
+            case contents = "post_content"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            postID = container.flexibleUInt64(forKey: .postID)
+            createTime = container.flexibleIntValue(forKey: .createTime)
+            contents = (try? container.decodeIfPresent([ContentDTO].self, forKey: .contents)) ?? []
+        }
+    }
+
+    struct ThreadDTO: Decodable {
+        var forumID: Int64
+        var threadID: Int64
+        var forumName: String
+        var title: String
+        var replies: [ReplyDTO]
+
+        enum CodingKeys: String, CodingKey {
+            case forumID = "forum_id"
+            case threadID = "thread_id"
+            case forumName = "forum_name"
+            case title
+            case replies = "content"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            forumID = container.flexibleInt64(forKey: .forumID)
+            threadID = container.flexibleInt64(forKey: .threadID)
+            forumName = container.flexibleString(forKey: .forumName)
+            title = container.flexibleString(forKey: .title)
+            replies = (try? container.decodeIfPresent([ReplyDTO].self, forKey: .replies)) ?? []
+        }
+    }
+
+    var errorCode: Int
+    var errorMessage: String
+    var hidePost: Int
+    var threads: [ThreadDTO]
+
+    enum CodingKeys: String, CodingKey {
+        case threads = "post_list"
+        case errorCode = "error_code"
+        case errorMessage = "error_msg"
+        case hidePost = "hide_post"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        threads = (try? container.decodeIfPresent([ThreadDTO].self, forKey: .threads)) ?? []
+        errorCode = Int(container.flexibleString(forKey: .errorCode)) ?? 0
+        errorMessage = container.flexibleString(forKey: .errorMessage)
+        hidePost = container.flexibleIntValue(forKey: .hidePost)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func flexibleString(forKey key: Key) -> String {
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return String(value) }
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return String(value) }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            // `error_code: 0.0` is a status, not a decimal: keep the integral
+            // value so a fractional spelling cannot read as success.
+            return value == value.rounded() ? String(Int(value)) : String(value)
+        }
+        return ""
+    }
+
+    func flexibleIntValue(forKey key: Key) -> Int {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return Int(clamping: value) }
+        if let value = try? decodeIfPresent(Bool.self, forKey: key) { return value ? 1 : 0 }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return Int(value) ?? 0 }
+        return 0
+    }
+
+    func flexibleInt64(forKey key: Key) -> Int64 {
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return Int64(value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return Int64(value) ?? 0 }
+        return 0
+    }
+
+    func flexibleUInt64(forKey key: Key) -> UInt64 {
+        if let value = try? decodeIfPresent(UInt64.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int64.self, forKey: key), value > 0 { return UInt64(value) }
+        if let value = try? decodeIfPresent(Int.self, forKey: key), value > 0 { return UInt64(value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return UInt64(value) ?? 0 }
+        return 0
     }
 }

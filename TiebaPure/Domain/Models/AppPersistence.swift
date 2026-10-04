@@ -80,6 +80,90 @@ enum AppModelContainer {
         persistenceAvailability(for: container, resolvedSharedContainer: sharedResolution)
     }
 
+    /// Records where the local records actually live, once per launch.
+    ///
+    /// A store that opens but comes back empty and a store that never opened
+    /// look the same from the outside — 浏览历史 is just empty. This pair of
+    /// lines separates them from one exported log: it carries the durability
+    /// bit, the on-disk store files with their sizes and timestamps, and the
+    /// row count of every model including the three backend markers.
+    @MainActor
+    static func recordLaunchDiagnostics() {
+        PersistenceDiagnostics.note(
+            "启动自检：存储="
+                + (sharedResolution.availability.canPersist
+                    ? "可用"
+                    : "不可用（已回退内存库，退出后本机记录不保留）")
+                + "；\(storeFileSummary())"
+        )
+        let context = sharedResolution.container.mainContext
+        let counts = [
+            rowCount(ThreadFavoriteRecord.self, label: "收藏", in: context),
+            rowCount(ThreadReadingPositionRecord.self, label: "阅读进度", in: context),
+            rowCount(BrowsingHistoryRecord.self, label: "浏览历史", in: context),
+            rowCount(RecentForumRecord.self, label: "最近吧", in: context),
+            rowCount(SearchHistoryRecord.self, label: "搜索历史", in: context),
+            rowCount(ContentDraftRecord.self, label: "草稿", in: context),
+            rowCount(ThreadReadingPositionBackendMarkerRecord.self, label: "进度标记", in: context),
+            rowCount(OrderedCollectionBackendMarkerRecord.self, label: "集合标记", in: context),
+            rowCount(ContentDraftBackendMarkerRecord.self, label: "草稿标记", in: context)
+        ]
+        PersistenceDiagnostics.note("启动自检：本机记录数 " + counts.joined(separator: " "))
+    }
+
+    private static func rowCount<Model: PersistentModel>(
+        _ type: Model.Type,
+        label: String,
+        in context: ModelContext
+    ) -> String {
+        do {
+            return "\(label)=\(try context.fetchCount(FetchDescriptor<Model>()))"
+        } catch {
+            return "\(label)=读取失败(\(String(describing: error)))"
+        }
+    }
+
+    /// The SwiftData default store sits in Application Support next to the file
+    /// backends' JSON. Size and modification time tell a store that was
+    /// replaced (fresh timestamp, near-empty file) apart from one that kept its
+    /// rows, which no in-app screen can show.
+    private static func storeFileSummary() -> String {
+        guard let directory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return "定位不到 Application Support"
+        }
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        var parts: [String] = []
+        for name in ["default.store", "default.store-shm", "default.store-wal"] {
+            let url = directory.appendingPathComponent(name, isDirectory: false)
+            guard let values = try? url.resourceValues(forKeys: keys),
+                  let size = values.fileSize else { continue }
+            parts.append("\(name)=\(size)B@\(timestamp(values.contentModificationDate))")
+        }
+        guard parts.isEmpty else { return parts.joined(separator: " ") }
+        // Without a default store, name whatever else is in the directory so a
+        // store living under an unexpected name cannot hide behind this line.
+        let listing = (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?
+            .sorted()
+            .prefix(12)
+            .joined(separator: ",") ?? ""
+        return "没有 default.store；Application Support=[\(listing)]"
+    }
+
+    private static func timestamp(_ date: Date?) -> String {
+        guard let date else { return "无时间" }
+        return storeTimestampFormatter.string(from: date)
+    }
+
+    private static let storeTimestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MM-dd HH:mm:ss"
+        return formatter
+    }()
+
     static func persistenceAvailability(
         for container: ModelContainer,
         resolvedSharedContainer: Resolution

@@ -402,7 +402,11 @@ extension TiebaAPI {
 
         try validateResponseCode(response.errorCode, message: response.errorMessage)
 
-        return response.forums.map(ForumMapper.fromFollowedForum)
+        let forums = response.forums.map(ForumMapper.fromFollowedForum)
+        // The only endpoint that returns avatars for the whole followed list.
+        // Handing them to the index is what lets a profile page show them.
+        ForumAvatarIndex.shared.store(forums: forums)
+        return forums
     }
 
     func forumThreads(

@@ -23,6 +23,10 @@ struct ContentComposerView: View {
     @State private var submissionState: ContentComposerSubmissionState = .idle
     @State private var isSavingDraft = false
     @State private var draftStatusMessage: String?
+    /// The status also rides in the bottom action bar, where the button that
+    /// caused it lives. The inline copy at the end of the scroll content sits
+    /// behind the keyboard, so a save could look like a dead button.
+    @State private var draftStatusIsFailure = false
     @State private var showsEmoticons = false
     @State private var showsUnsavedChangesConfirmation = false
     @StateObject private var dismissalGate = ContentComposerDismissalGate()
@@ -300,13 +304,10 @@ struct ContentComposerView: View {
                 )
             }
 
-            if let draftStatusMessage {
-                ContentComposerStatusView(
-                    message: draftStatusMessage,
-                    systemImage: "doc.badge.checkmark",
-                    tint: .secondary
-                )
-            }
+            // The draft status is deliberately not repeated here. It belongs to
+            // the button that produces it, and a second copy at the end of the
+            // scroll content sat behind the keyboard — the save looked like a
+            // dead button, and one visible message is also one match for tests.
 
             switch submissionState {
             case .idle, .submitting:
@@ -356,23 +357,36 @@ struct ContentComposerView: View {
     }
 
     private var actionBar: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 4) {
-                mediaButton
-                emoticonButton
-                Spacer(minLength: 8)
-                draftButton
+        VStack(spacing: 4) {
+            if let draftStatusMessage {
+                ContentComposerStatusView(
+                    message: draftStatusMessage,
+                    systemImage: draftStatusIsFailure
+                        ? "exclamationmark.triangle.fill"
+                        : "doc.badge.checkmark",
+                    tint: draftStatusIsFailure ? .red : .secondary
+                )
+                .accessibilityIdentifier("content-composer-draft-status")
             }
 
-            VStack(spacing: 4) {
+            ViewThatFits(in: .horizontal) {
                 HStack(spacing: 4) {
                     mediaButton
                     emoticonButton
                     Spacer(minLength: 8)
-                }
-                HStack {
-                    Spacer(minLength: 0)
                     draftButton
+                }
+
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        mediaButton
+                        emoticonButton
+                        Spacer(minLength: 8)
+                    }
+                    HStack {
+                        Spacer(minLength: 0)
+                        draftButton
+                    }
                 }
             }
         }
@@ -546,10 +560,19 @@ struct ContentComposerView: View {
     }
 
     private func persistDraft(thenClose: Bool) {
-        guard isBusy == false, photoLoadProgress == nil else { return }
+        guard isBusy == false else { return }
+        guard photoLoadProgress == nil else {
+            // The button is disabled while an attachment is still being
+            // prepared, but a tap that arrives anyway must state the reason
+            // rather than leave the button looking dead.
+            draftStatusIsFailure = true
+            draftStatusMessage = "图片还在处理，完成后才能保存草稿。"
+            return
+        }
         let request = currentRequest
         isSavingDraft = true
         draftStatusMessage = nil
+        draftStatusIsFailure = false
         Task {
             var didSave = false
             do {
@@ -561,11 +584,13 @@ struct ContentComposerView: View {
                     body: request.body,
                     images: request.images
                 )
+                draftStatusIsFailure = false
                 draftStatusMessage = "草稿已保存"
                 didSave = true
             } catch is CancellationError {
                 // The caller owns cancellation; do not turn it into an error banner.
             } catch {
+                draftStatusIsFailure = true
                 draftStatusMessage = "草稿保存失败：\(error.localizedDescription)"
             }
             isSavingDraft = false

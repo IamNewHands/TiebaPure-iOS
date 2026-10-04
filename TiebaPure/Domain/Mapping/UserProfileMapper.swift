@@ -90,6 +90,49 @@ enum UserProfileMapper {
         )
     }
 
+    /// The reply feed answers with one row per thread and the account's own
+    /// replies nested underneath, so the flat list this screen shows is built by
+    /// walking both levels. Rows are keyed by post ID: one thread can hold
+    /// several of the account's replies.
+    static func ownRepliesPage(from response: UserPostFeedDTO, page: Int) -> OwnRepliesPage {
+        var replies: [OwnReply] = []
+        var seenPostIDs = Set<UInt64>()
+        for thread in response.threads {
+            guard thread.threadID > 0 else { continue }
+            for reply in thread.replies {
+                guard reply.postID > 0, seenPostIDs.insert(reply.postID).inserted else { continue }
+                replies.append(
+                    OwnReply(
+                        id: reply.postID,
+                        forumID: thread.forumID,
+                        forumName: normalizedForumName(thread.forumName),
+                        threadID: thread.threadID,
+                        threadTitle: thread.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                        body: replyBody(from: reply.contents),
+                        createdAt: reply.createTime == 0
+                            ? nil
+                            : Date(timeIntervalSince1970: TimeInterval(reply.createTime))
+                    )
+                )
+            }
+        }
+        return OwnRepliesPage(
+            replies: replies,
+            currentPage: page,
+            hasMore: response.hidePost == 0 && response.threads.isEmpty == false,
+            visibility: response.hidePost == 0 ? .visible : .privateContent
+        )
+    }
+
+    /// A reply made only of pictures has no text to show, and an empty row would
+    /// read as a decode failure rather than as a picture reply.
+    private static func replyBody(from contents: [UserPostFeedDTO.ContentDTO]) -> String {
+        let text = contents.map(\.text).joined()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty == false { return text }
+        return contents.isEmpty ? "" : "［非文字内容］"
+    }
+
     static func deletionTarget(
         from item: Tiebapure_Profile_UserThreadItem
     ) -> OwnThreadDeletionTarget? {

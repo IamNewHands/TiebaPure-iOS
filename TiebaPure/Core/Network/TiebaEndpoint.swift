@@ -23,8 +23,10 @@ enum TiebaEndpoint {
     case searchUser
     case userProfile
     case userThreads
+    case userPosts
     case modifyProfile
     case deleteOwnThread
+    case deleteOwnPost
     case followUser
     case unfollowUser
     case followedUsers
@@ -114,8 +116,17 @@ enum TiebaEndpoint {
                 ])
         case .modifyProfile:
             return Self.socialBase.appending(path: "/c/c/profile/modify")
+        case .userPosts:
+            // The same path as `.userThreads`, but the JSON (mini) form rather
+            // than the protobuf one. Only the JSON shape nests the account's own
+            // replies under `post_list[].content[]`; the committed protobuf
+            // schema has no field for them, and `is_thread = 0` over protobuf
+            // has been reported to answer with an empty list.
+            return Self.appBase.appending(path: "/c/u/feed/userpost")
         case .deleteOwnThread:
             return Self.appBase.appending(path: "/c/c/bawu/delthread")
+        case .deleteOwnPost:
+            return Self.appBase.appending(path: "/c/c/bawu/delpost")
         case .followUser:
             return Self.socialBase.appending(path: "/c/c/user/follow")
         case .unfollowUser:

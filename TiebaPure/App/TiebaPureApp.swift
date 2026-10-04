@@ -38,6 +38,14 @@ struct TiebaPureApp: App {
                 guard readerFontStore.isReady else { return }
                 readingPreferencesStore.reconcileAvailableImportedFonts(readerFontStore.entries)
             }
+            .task {
+                // One line pair per launch: where local records live and how
+                // many rows each store actually holds. Without it an empty
+                // 浏览历史 cannot be told apart from a store that never opened.
+                if #available(iOS 17.0, *) {
+                    await AppModelContainer.recordLaunchDiagnostics()
+                }
+            }
         }
     }
 }

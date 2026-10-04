@@ -486,6 +486,140 @@ final class UserProfileMutationTests: XCTestCase {
         ), 1)
     }
 
+    func testDeleteReplyFieldsTargetTheReplyNotTheThread() throws {
+        let fields = try UserProfileRequestFactory.deletePostFields(
+            account: Self.account,
+            tbs: "  fresh-tbs  ",
+            reply: Self.reply,
+            requestBuilder: Self.requestBuilder,
+            timestamp: 1_234
+        )
+
+        var expected = Self.requestBuilder.officialCommonFields(
+            bduss: Self.account.bduss,
+            baiduID: Self.account.baiduID,
+            clientVersion: UserProfileRequestFactory.ownThreadDeleteClientVersion,
+            timestamp: 1_234
+        )
+        expected.merge([
+            "delete_my_post": "1",
+            "fid": "73",
+            "is_vipdel": "0",
+            "isfloor": "0",
+            "pid": "2001",
+            "src": "1",
+            "tbs": "fresh-tbs",
+            "word": "夹具",
+            "z": "1001"
+        ], uniquingKeysWith: { _, new in new })
+        XCTAssertEqual(fields, expected)
+        XCTAssertNil(
+            fields["delete_my_thread"],
+            "删一条回复不能带上删主题的标记，否则会连主题一起删掉"
+        )
+        XCTAssertEqual(TiebaEndpoint.deleteOwnPost.url.host, "c.tieba.baidu.com")
+        XCTAssertEqual(TiebaEndpoint.deleteOwnPost.url.path, "/c/c/bawu/delpost")
+
+        let invalidTargets: [(OwnReply, UserProfileMutationError)] = [
+            (OwnReply(id: 2001, forumID: 0, forumName: "夹具", threadID: 1001, threadTitle: "标题", body: "内容"), .invalidForumID),
+            (OwnReply(id: 2001, forumID: 73, forumName: "  ", threadID: 1001, threadTitle: "标题", body: "内容"), .invalidForumName),
+            (OwnReply(id: 2001, forumID: 73, forumName: "夹具", threadID: 0, threadTitle: "标题", body: "内容"), .invalidThreadID),
+            (OwnReply(id: 0, forumID: 73, forumName: "夹具", threadID: 1001, threadTitle: "标题", body: "内容"), .invalidReplyID)
+        ]
+        for (reply, expectedError) in invalidTargets {
+            XCTAssertThrowsError(
+                try UserProfileRequestFactory.deletePostFields(
+                    account: Self.account,
+                    tbs: "fresh-tbs",
+                    reply: reply,
+                    requestBuilder: Self.requestBuilder,
+                    timestamp: 1_234
+                )
+            ) { error in
+                XCTAssertEqual(error as? UserProfileMutationError, expectedError)
+            }
+        }
+    }
+
+    func testReplyFeedMapsNestedRepliesIntoRows() throws {
+        let feed = try JSONDecoder().decode(
+            UserPostFeedDTO.self,
+            from: Data(Self.replyFeedJSON.utf8)
+        )
+
+        let page = UserProfileMapper.ownRepliesPage(from: feed, page: 2)
+
+        XCTAssertEqual(page.currentPage, 2)
+        XCTAssertEqual(page.replies.count, 2, "一行主题里嵌着的两条回复都要摊出来")
+        XCTAssertEqual(page.replies[0].id, 2001)
+        XCTAssertEqual(page.replies[0].forumID, 73)
+        XCTAssertEqual(page.replies[0].forumName, "夹具")
+        XCTAssertEqual(page.replies[0].threadID, 1001)
+        XCTAssertEqual(page.replies[0].threadTitle, "回复：夹具标题")
+        XCTAssertEqual(page.replies[0].body, "第一条回复", "多段文字要拼成一条正文")
+        XCTAssertEqual(
+            page.replies[0].createdAt,
+            Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertEqual(page.replies[1].id, 2002, "字符串形式的回复 ID 也要解出来")
+        XCTAssertNil(page.replies[1].createdAt, "时间戳为 0 时不能编出一个日期")
+        XCTAssertEqual(page.replies[1].body, "［非文字内容］", "纯图片回复不能显示成空行")
+        XCTAssertTrue(page.hasMore)
+        XCTAssertEqual(page.visibility, .visible)
+    }
+
+    func testUserRepliesFetchesTheJSONReplyFeed() async throws {
+        let harness = makeAPI(mode: .success)
+        defer { ProfileMutationURLProtocol.remove(id: harness.id) }
+
+        let page = try await harness.api.userReplies(
+            account: Self.account,
+            userID: 42,
+            page: 1
+        )
+
+        let records = ProfileMutationURLProtocol.records(id: harness.id)
+        XCTAssertEqual(records.map(\.path), ["/c/u/feed/userpost"])
+        let request = try XCTUnwrap(records.last)
+        let fields = try Self.formFields(request.body)
+        XCTAssertEqual(fields["is_thread"], "0", "回帖和主题共用同一个接口，靠这个字段切换")
+        XCTAssertEqual(fields["need_content"], "1")
+        XCTAssertEqual(fields["uid"], "42")
+        XCTAssertEqual(fields["pn"], "1")
+        XCTAssertEqual(fields["subapp_type"], "mini")
+        XCTAssertEqual(fields["_client_version"], UserProfileRequestFactory.ownPostClientVersion)
+        XCTAssertNotNil(fields["sign"], "表单接口必须签名")
+        XCTAssertEqual(request.host, "c.tieba.baidu.com")
+        XCTAssertEqual(page.replies.count, 2)
+        XCTAssertEqual(page.replies[0].body, "第一条回复")
+    }
+
+    func testDeleteOwnReplyRefreshesTBSThenPostsToDelpost() async throws {
+        let harness = makeAPI(mode: .success)
+        defer { ProfileMutationURLProtocol.remove(id: harness.id) }
+
+        try await harness.api.deleteOwnReply(account: Self.account, reply: Self.reply)
+
+        let records = ProfileMutationURLProtocol.records(id: harness.id)
+        XCTAssertEqual(
+            records.map(\.path),
+            ["/c/s/login", "/c/c/bawu/delpost"],
+            "先取一次 tbs，然后只发一次删除请求"
+        )
+        let request = try XCTUnwrap(records.last)
+        let fields = try Self.formFields(request.body)
+        XCTAssertEqual(fields["pid"], "2001", "要删的是这条回复自己的 post id")
+        XCTAssertEqual(fields["z"], "1001")
+        XCTAssertEqual(fields["delete_my_post"], "1")
+        XCTAssertEqual(fields["isfloor"], "0")
+        XCTAssertNil(fields["delete_my_thread"])
+        XCTAssertEqual(
+            ProfileMutationURLProtocol.count(path: "/c/c/bawu/delpost", id: harness.id),
+            1,
+            "已发出的删除请求不能自动重试"
+        )
+    }
+
     func testDeleteBusinessErrorRemainsSpecificAndIsNotRetried() async {
         let harness = makeAPI(mode: .businessError)
         defer { ProfileMutationURLProtocol.remove(id: harness.id) }
@@ -1151,6 +1285,19 @@ final class UserProfileMutationTests: XCTestCase {
         firstPostID: 2001
     )
 
+    private static let reply = OwnReply(
+        id: 2001,
+        forumID: 73,
+        forumName: "夹具",
+        threadID: 1001,
+        threadTitle: "回复：夹具标题",
+        body: "第一条回复"
+    )
+
+    /// One `post_list` row per thread with the account's own replies nested
+    /// under `content`, which is the shape the JSON reply feed answers with.
+    private static let replyFeedJSON = profileMutationReplyFeedJSON
+
     private static let ownThreadPage = ThreadPage(
         thread: ThreadSummary(
             id: 1001,
@@ -1233,6 +1380,39 @@ final class UserProfileMutationTests: XCTestCase {
     )
 }
 
+/// One `post_list` row per thread with the account's own replies nested under
+/// `content` — the shape `/c/u/feed/userpost` answers with for `is_thread = 0`.
+private let profileMutationReplyFeedJSON = """
+{
+  "error_code": 0,
+  "error_msg": "",
+  "hide_post": 0,
+  "post_list": [
+    {
+      "forum_id": 73,
+      "thread_id": 1001,
+      "forum_name": "夹具",
+      "title": "回复：夹具标题",
+      "content": [
+        {
+          "post_id": 2001,
+          "create_time": 1700000000,
+          "post_content": [
+            { "type": 0, "text": "第一条" },
+            { "type": 0, "text": "回复" }
+          ]
+        },
+        {
+          "post_id": "2002",
+          "create_time": 0,
+          "post_content": [ { "type": 3, "text": "" } ]
+        }
+      ]
+    }
+  ]
+}
+"""
+
 private enum ProfileMutationStubMode: Sendable {
     case success
     case businessError
@@ -1303,7 +1483,9 @@ private final class ProfileMutationURLProtocol: URLProtocol {
         switch url.path {
         case "/c/s/login":
             respond(Data(#"{"error_code":"0","anti":{"tbs":"fresh-tbs"}}"#.utf8))
-        case "/c/c/profile/modify", "/c/c/bawu/delthread":
+        case "/c/u/feed/userpost":
+            respond(Data(profileMutationReplyFeedJSON.utf8))
+        case "/c/c/profile/modify", "/c/c/bawu/delthread", "/c/c/bawu/delpost":
             switch mode {
             case .success:
                 respond(Data(#"{"error_code":0,"error_msg":""}"#.utf8))

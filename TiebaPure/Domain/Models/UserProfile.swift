@@ -88,6 +88,31 @@ struct UserThreadsPage: Equatable, Sendable {
     var deletionTargetsByThreadID: [Int64: OwnThreadDeletionTarget] = [:]
 }
 
+/// One reply the signed-in account wrote, from the same profile feed with
+/// `is_thread = 0` instead of `1`.
+///
+/// Identity is the reply's own post ID, not the thread ID: the account can
+/// reply several times in one thread, and keying a list by thread would collapse
+/// those rows into one.
+struct OwnReply: Identifiable, Equatable, Hashable, Sendable {
+    var id: UInt64
+    var forumID: Int64
+    var forumName: String
+    var threadID: Int64
+    /// The title of the thread the reply sits in.
+    var threadTitle: String
+    /// The reply's own text.
+    var body: String
+    var createdAt: Date? = nil
+}
+
+struct OwnRepliesPage: Equatable, Sendable {
+    var replies: [OwnReply]
+    var currentPage: Int
+    var hasMore: Bool
+    var visibility: UserContentVisibility
+}
+
 enum UserProfileManagementPolicy {
     static func canEdit(profile: UserProfile, account: Account?) -> Bool {
         guard profile.isCurrentUser, let account else { return false }

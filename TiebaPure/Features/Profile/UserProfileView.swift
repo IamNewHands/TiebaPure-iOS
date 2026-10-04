@@ -58,6 +58,10 @@ struct UserProfileView: View {
     @State private var followTask: Task<Void, Never>?
     @State private var isUpdatingFollow = false
     @State private var userActionError: String?
+    /// Published copy of `ForumAvatarIndex`, which SwiftUI cannot observe. The
+    /// profile endpoint carries no forum avatar, so this is the lookup that
+    /// turns a followed-forum row into a real image instead of an initial.
+    @State private var forumAvatarURLs: [Int64: URL] = [:]
     @State private var selectedThread: UserProfileThreadRoute?
     @State private var selectedForum: Forum?
     @State private var selectedRelationshipKind: UserRelationshipKind?
@@ -469,14 +473,16 @@ struct UserProfileView: View {
                     } label: {
                         HStack(spacing: TiebaPureTheme.Spacing.sm) {
                             AvatarView(
-                                url: forum.avatarURL,
+                                url: forumAvatarURL(for: forum),
                                 title: forum.displayName,
                                 size: TiebaPureTheme.AvatarSize.medium,
-                                // A profile's followed-forum rows carry no
-                                // avatar from the service, so show the forum's
-                                // first character rather than an empty
-                                // silhouette. The avatar-carrying endpoint is
-                                // only available for the signed-in account.
+                                // The profile endpoint returns no avatar, but
+                                // the account's followed-forum endpoints do:
+                                // the shared index maps this row's forum ID to
+                                // the real image. Until it is known — or for a
+                                // forum this account does not follow — show the
+                                // forum's first character instead of an empty
+                                // silhouette.
                                 fallbackInitial: AvatarInitialPolicy.initial(
                                     from: forum.name,
                                     forum.displayName
@@ -512,7 +518,33 @@ struct UserProfileView: View {
                 }
             }
             .background(Color(uiColor: .systemBackground))
+            .task(id: profile.user.id) {
+                await loadForumAvatarsIfNeeded()
+            }
         }
+    }
+
+    /// The profile row's own `avatarURL` is always nil: the endpoint behind the
+    /// 关注的吧 list does not return one. The forum ID is still enough to reuse
+    /// an avatar that the followed-forum endpoints already delivered.
+    private func forumAvatarURL(for forum: Forum) -> URL? {
+        forumAvatarURLs[forum.id] ?? forum.avatarURL
+    }
+
+    /// One request per session fills the avatars of every followed forum. A
+    /// failure keeps the index unloaded, so the next profile view tries again
+    /// instead of keeping initials for the rest of the session.
+    private func loadForumAvatarsIfNeeded() async {
+        // Another screen may already have filled the shared index, in which
+        // case there is nothing to fetch — only something to publish.
+        let cached = ForumAvatarIndex.shared.snapshot
+        if cached.isEmpty == false {
+            forumAvatarURLs = cached
+        }
+        guard let account, ForumAvatarIndex.shared.needsLoad else { return }
+        guard let forums = try? await environment.api.followedForums(account: account) else { return }
+        ForumAvatarIndex.shared.store(forums: forums)
+        forumAvatarURLs = ForumAvatarIndex.shared.snapshot
     }
 
     // The loaded profile carries the authoritative user id; before it arrives

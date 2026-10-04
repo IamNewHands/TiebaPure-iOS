@@ -100,6 +100,72 @@ final class FollowedForumStatusTests: XCTestCase {
         XCTAssertEqual(response.forums.isEmpty, true)
     }
 
+    func testGuideResponseKeepsEachForumAvatar() throws {
+        // Every guide row carries a signed avatar. It used to be dropped at the
+        // DTO, which is why a profile's 关注的吧 list had no image to show even
+        // though the app had just downloaded forty of them.
+        let json = """
+        {
+          "error_code": 0,
+          "error_msg": "",
+          "like_forum": [
+            {
+              "forum_id": 4242,
+              "forum_name": "合成吧",
+              "level_id": "12",
+              "is_sign": true,
+              "avatar": "https://himg.bdimg.com/sys/portraitn/item/abc123"
+            },
+            { "forum_id": 4343, "forum_name": "另一个吧", "level_id": 3, "is_sign": 0 }
+          ]
+        }
+        """
+
+        let response = try JSONDecoder().decode(FollowedForumGuideResponseDTO.self, from: Data(json.utf8))
+
+        XCTAssertEqual(response.forums[0].avatar, "https://himg.bdimg.com/sys/portraitn/item/abc123")
+        XCTAssertEqual(
+            TiebaURL.make(response.forums[0].avatar),
+            URL(string: "https://himg.bdimg.com/sys/portraitn/item/abc123")
+        )
+        XCTAssertNil(response.forums[1].avatar, "没有头像的行保持为空，好让列表用首字兜底")
+    }
+
+    func testForumAvatarIndexAnswersByForumIDOnly() {
+        let index = ForumAvatarIndex()
+        XCTAssertTrue(index.needsLoad)
+
+        index.store(forums: [
+            Forum(
+                id: 7,
+                name: "壁纸",
+                displayName: "壁纸吧",
+                avatarURL: URL(string: "https://himg.bdimg.com/sys/portraitn/item/seven"),
+                memberCount: 0,
+                threadCount: 0
+            ),
+            Forum(id: 8, name: "无图", displayName: "无图吧", avatarURL: nil, memberCount: 0, threadCount: 0)
+        ])
+
+        XCTAssertEqual(
+            index.url(for: 7),
+            URL(string: "https://himg.bdimg.com/sys/portraitn/item/seven")
+        )
+        XCTAssertNil(index.url(for: 8), "接口没给头像的行不能凭空补一个")
+        XCTAssertNil(index.url(for: 99), "没见过的吧不能借用别的头像")
+        XCTAssertFalse(index.needsLoad, "已经拉过一次就不再重复请求")
+        XCTAssertEqual(index.snapshot.count, 1)
+    }
+
+    func testForumAvatarIndexTreatsAnAvatarlessAnswerAsLoaded() {
+        let index = ForumAvatarIndex()
+
+        index.store(statuses: [FollowedForumStatus(forumID: 9, level: 1, isSignedToday: false)])
+
+        XCTAssertFalse(index.needsLoad, "接口答过就算答过，不能每次进主页都重发请求")
+        XCTAssertNil(index.url(for: 9))
+    }
+
     func testTileLabelReadsLevelAndCheckInAsOneSentence() {
         XCTAssertEqual(
             ForumTileAccessibilityPolicy.label(

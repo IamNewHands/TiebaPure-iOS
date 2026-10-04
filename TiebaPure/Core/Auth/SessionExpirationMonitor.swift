@@ -155,6 +155,16 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         }
     }
 
+    func userReplies(
+        account: Account?,
+        userID: Int64,
+        page: Int
+    ) async throws -> OwnRepliesPage {
+        try await monitored(account: account) {
+            try await base.userReplies(account: account, userID: userID, page: page)
+        }
+    }
+
     func updateOwnProfile(account: Account, request: UserProfileEditRequest) async throws {
         try await monitored(account: account) {
             try await base.updateOwnProfile(account: account, request: request)
@@ -164,6 +174,12 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
     func deleteOwnThread(account: Account, target: OwnThreadDeletionTarget) async throws {
         try await monitored(account: account) {
             try await base.deleteOwnThread(account: account, target: target)
+        }
+    }
+
+    func deleteOwnReply(account: Account, reply: OwnReply) async throws {
+        try await monitored(account: account) {
+            try await base.deleteOwnReply(account: account, reply: reply)
         }
     }
 

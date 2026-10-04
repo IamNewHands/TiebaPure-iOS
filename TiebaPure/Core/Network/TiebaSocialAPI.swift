@@ -352,11 +352,16 @@ struct FollowedForumGuideResponseDTO: Decodable {
         var forumID: Int64
         var level: Int
         var isSignedToday: Bool
+        /// Every guide row carries a signed forum avatar. It used to be dropped
+        /// here, which is why the profile's followed-forum list had no image to
+        /// show even though the app had just downloaded 40 of them.
+        var avatar: String?
 
         enum CodingKeys: String, CodingKey {
             case forumID = "forum_id"
             case level = "level_id"
             case isSignedToday = "is_sign"
+            case avatar
         }
 
         init(from decoder: Decoder) throws {
@@ -364,6 +369,7 @@ struct FollowedForumGuideResponseDTO: Decodable {
             forumID = container.flexibleInt64(forKey: .forumID)
             level = container.flexibleInt(forKey: .level)
             isSignedToday = container.flexibleBool(forKey: .isSignedToday)
+            avatar = container.decodeStringIfPresent(forKey: .avatar)
         }
     }
 
@@ -421,7 +427,8 @@ extension TiebaAPI {
                 return FollowedForumStatus(
                     forumID: forum.forumID,
                     level: max(forum.level, 0),
-                    isSignedToday: forum.isSignedToday
+                    isSignedToday: forum.isSignedToday,
+                    avatarURL: TiebaURL.make(forum.avatar)
                 )
             }
 
@@ -458,6 +465,9 @@ extension TiebaAPI {
             "汇总 \(statuses.count) 个贴吧，等级>0 的 \(statuses.filter { $0.level > 0 }.count) 个，"
                 + "已签到 \(statuses.filter(\.isSignedToday).count) 个"
         )
+        // These rows already carry every followed forum's avatar, so the
+        // profile's 关注的吧 list can show real images without another request.
+        ForumAvatarIndex.shared.store(statuses: statuses)
         return statuses
     }
 

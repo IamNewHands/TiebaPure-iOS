@@ -38,6 +38,10 @@ protocol TiebaAPIService {
     ) async throws -> [Subpost]
     func userProfile(account: Account?, user: UserSummary) async throws -> UserProfile
     func userThreads(account: Account?, userID: Int64, page: Int) async throws -> UserThreadsPage
+    /// The signed-in account's own replies (本人回帖), served by the same
+    /// endpoint as `userThreads` with `is_thread = 0`.
+    func userReplies(account: Account?, userID: Int64, page: Int) async throws -> OwnRepliesPage
+    func deleteOwnReply(account: Account, reply: OwnReply) async throws
     func updateOwnProfile(account: Account, request: UserProfileEditRequest) async throws
     func deleteOwnThread(account: Account, target: OwnThreadDeletionTarget) async throws
     func setUserFollowed(account: Account, user: UserSummary, followed: Bool) async throws
@@ -88,6 +92,18 @@ protocol TiebaAPIService {
 }
 
 extension TiebaAPIService {
+    /// A service that does not model the reply feed (test doubles, offline
+    /// stubs) answers with an empty page. Returning the thread feed here would
+    /// label threads as replies, which is worse than showing nothing.
+    func userReplies(account: Account?, userID: Int64, page: Int) async throws -> OwnRepliesPage {
+        OwnRepliesPage(replies: [], currentPage: page, hasMore: false, visibility: .visible)
+    }
+
+    /// Deleting a reply is optional in the same way check-in is.
+    func deleteOwnReply(account: Account, reply: OwnReply) async throws {
+        throw UserProfileMutationError.unsupportedByService
+    }
+
     /// Same shape as the other optional write operations: services that do not
     /// implement check-in (test doubles, offline stubs) reject it rather than
     /// having to carry a stub.
