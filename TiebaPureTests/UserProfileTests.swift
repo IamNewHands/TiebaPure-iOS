@@ -127,6 +127,52 @@ final class UserProfileTests: XCTestCase {
         XCTAssertEqual(profile.followedForumsVisibility, .visible)
     }
 
+    /// The followed-forum rows of a profile arrive without an avatar: the
+    /// service's `likeForum` ships only a name and an id. The row therefore
+    /// falls back to the forum's first character, asserted here on the
+    /// mapper's own output.
+    func testProfileFollowedForumsProvideInitialBadges() {
+        var forum = Tieba_LikeForumInfo()
+        forum.forumID = 101
+        forum.forumName = "测试"
+        var latinForum = Tieba_LikeForumInfo()
+        latinForum.forumID = 102
+        latinForum.forumName = "steam"
+        var proto = Tieba_User()
+        proto.id = 99
+        proto.likeForum = [forum, latinForum]
+
+        let profile = UserProfileMapper.profile(
+            from: proto,
+            fallback: UserSummary(id: 99, name: "", displayName: "", portrait: ""),
+            isCurrentUser: false
+        )
+
+        XCTAssertEqual(profile.followedForums.compactMap(\.avatarURL), [])
+        XCTAssertEqual(
+            profile.followedForums.map { AvatarInitialPolicy.initial(from: $0.name, $0.displayName) },
+            ["测", "S"]
+        )
+    }
+
+    func testAvatarInitialPolicyFallsBackThroughCandidates() {
+        XCTAssertNil(AvatarInitialPolicy.initial(from: "", "   "))
+        XCTAssertEqual(AvatarInitialPolicy.initial(from: "  ", "网吧"), "网")
+        XCTAssertEqual(AvatarInitialPolicy.initial(from: "steam"), "S")
+        XCTAssertEqual(AvatarInitialPolicy.initial(from: "🎮游戏"), "🎮")
+    }
+
+    func testAvatarInitialPaletteIsStableAndBounded() {
+        let count = AvatarInitialPalette.colors.count
+        XCTAssertGreaterThan(count, 1)
+        for seed in ["孙笑川", "steam", "武汉大学", ""] {
+            let index = AvatarInitialPalette.index(for: seed, count: count)
+            XCTAssertEqual(index, AvatarInitialPalette.index(for: seed, count: count))
+            XCTAssertTrue((0..<count).contains(index))
+        }
+        XCTAssertEqual(AvatarInitialPalette.index(for: "任何名字", count: 0), 0)
+    }
+
     func testPrivacyPolicyDistinguishesPrivateFromPublicEmptyForums() {
         XCTAssertEqual(
             UserProfilePrivacyPolicy.followedForumsVisibility(

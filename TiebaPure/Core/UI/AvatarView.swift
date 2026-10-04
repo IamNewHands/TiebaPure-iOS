@@ -1152,17 +1152,69 @@ private struct TiebaResolvedImageFrameReader: UIViewRepresentable {
     }
 }
 
+/// The badge letter for a value that has no image at all.
+///
+/// `/c/u/user/profile` answers a user's followed forums with only a name and an
+/// id per row, so that column has no picture to load and every row would repeat
+/// the same anonymous silhouette. Callers that know a name pass its first
+/// character here instead.
+enum AvatarInitialPolicy {
+    static func initial(from candidates: String...) -> String? {
+        for candidate in candidates {
+            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let first = trimmed.first else { continue }
+            return String(first).uppercased()
+        }
+        return nil
+    }
+}
+
+/// Stable color for a badge letter: the same name always lands on the same
+/// swatch, so a list reads as a fixed set of badges instead of a column that
+/// recolors itself on every redraw.
+enum AvatarInitialPalette {
+    static let colors: [Color] = [
+        Color(red: 0.29, green: 0.56, blue: 0.89),
+        Color(red: 0.90, green: 0.49, blue: 0.27),
+        Color(red: 0.30, green: 0.64, blue: 0.45),
+        Color(red: 0.60, green: 0.43, blue: 0.83),
+        Color(red: 0.84, green: 0.40, blue: 0.52),
+        Color(red: 0.28, green: 0.61, blue: 0.74)
+    ]
+
+    static func color(for seed: String?) -> Color {
+        colors[index(for: seed ?? "", count: colors.count)]
+    }
+
+    static func index(for seed: String, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        var hash: UInt32 = 2_166_136_261
+        for scalar in seed.unicodeScalars {
+            hash = (hash ^ scalar.value) &* 16_777_619
+        }
+        return Int(hash % UInt32(count))
+    }
+}
+
 struct AvatarView: View {
     @Environment(\.displayScale) private var displayScale
 
     let url: URL?
     let title: String?
     let size: CGFloat
+    let fallbackInitial: String?
 
-    init(url: URL?, title: String? = nil, size: CGFloat = TiebaPureTheme.AvatarSize.medium) {
+    init(
+        url: URL?,
+        title: String? = nil,
+        size: CGFloat = TiebaPureTheme.AvatarSize.medium,
+        fallbackInitial: String? = nil
+    ) {
         self.url = url
         self.title = title
         self.size = size
+        let trimmed = fallbackInitial?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.fallbackInitial = (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
     var body: some View {
@@ -1191,9 +1243,21 @@ struct AvatarView: View {
     }
 
     private var placeholder: some View {
-        Image(systemName: "person.fill")
-            .font(.system(size: max(13, size * 0.42), weight: .medium))
-            .foregroundStyle(.secondary)
-            .accessibilityHidden(true)
+        ZStack {
+            if let fallbackInitial {
+                Circle()
+                    .fill(AvatarInitialPalette.color(for: title ?? fallbackInitial))
+                Text(fallbackInitial)
+                    .font(.system(size: max(13, size * 0.42), weight: .semibold))
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 2)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: max(13, size * 0.42), weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

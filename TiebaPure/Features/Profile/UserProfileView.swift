@@ -471,7 +471,16 @@ struct UserProfileView: View {
                             AvatarView(
                                 url: forum.avatarURL,
                                 title: forum.displayName,
-                                size: TiebaPureTheme.AvatarSize.medium
+                                size: TiebaPureTheme.AvatarSize.medium,
+                                // A profile's followed-forum rows carry no
+                                // avatar from the service, so show the forum's
+                                // first character rather than an empty
+                                // silhouette. The avatar-carrying endpoint is
+                                // only available for the signed-in account.
+                                fallbackInitial: AvatarInitialPolicy.initial(
+                                    from: forum.name,
+                                    forum.displayName
+                                )
                             )
 
                             Text(forum.displayName)
