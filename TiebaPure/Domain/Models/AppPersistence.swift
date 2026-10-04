@@ -64,7 +64,14 @@ enum AppModelContainer {
         do {
             return Resolution(container: try persistent(), availability: .available)
         } catch {
-            PersistenceDiagnostics.report(error, operation: "open persistent model container")
+            // The operation string carries the consequence as well as the
+            // cause: this one line is what a user-exported diagnostic log shows
+            // when local records stop surviving a relaunch and the draft store
+            // refuses to open.
+            PersistenceDiagnostics.report(
+                error,
+                operation: "本机数据库打不开，已回退内存库（本次运行不写盘，退出后浏览历史/草稿等本机记录不保留）"
+            )
             return Resolution(container: try fallback(), availability: .unavailable)
         }
     }

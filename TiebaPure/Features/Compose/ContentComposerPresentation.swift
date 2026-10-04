@@ -105,13 +105,26 @@ struct ContentComposerPresentation: View {
                 }
             case .unavailable:
                 draftStateNavigation {
-                    ReaderStateView.error(
-                        title: "无法恢复草稿",
-                        message: "本机草稿读取失败。为避免覆盖已有内容，编辑器已暂停打开。",
-                        actionTitle: "重试",
-                        action: retryDraftLoad
-                    )
-                    .accessibilityIdentifier("content-composer-draft-load-error")
+                    // A store that does not open is not a retryable draft
+                    // error: "重试" re-reads the same dead backend. Name the
+                    // real failure and the step the user can act on.
+                    if draftStorageIsUnavailable {
+                        ReaderStateView.error(
+                            title: "本机存储不可用",
+                            message: "本机数据库打不开，草稿保存在本机所以读不到。可先重启 App 再试；若一直如此，请到 设置 → 诊断日志 导出日志反馈。",
+                            actionTitle: nil,
+                            action: nil
+                        )
+                        .accessibilityIdentifier("content-composer-storage-unavailable")
+                    } else {
+                        ReaderStateView.error(
+                            title: "无法恢复草稿",
+                            message: "本机草稿读取失败。为避免覆盖已有内容，编辑器已暂停打开。",
+                            actionTitle: "重试",
+                            action: retryDraftLoad
+                        )
+                        .accessibilityIdentifier("content-composer-draft-load-error")
+                    }
                 }
             case let .damaged(damage):
                 damagedDraftNavigation(
@@ -232,6 +245,13 @@ struct ContentComposerPresentation: View {
         if ContentSubmissionRiskPolicy.hasAcknowledged() == false {
             showsRiskConfirmation = true
         }
+    }
+
+    /// True when the draft backend itself is gone rather than one read failing.
+    /// The composer must not offer a retry for this: the degraded backend is
+    /// fixed for the rest of the process.
+    private var draftStorageIsUnavailable: Bool {
+        environment.contentDraftStore.persistenceAvailability == .unavailable
     }
 
     private func retryDraftLoad() {

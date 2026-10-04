@@ -36,13 +36,25 @@ struct PersistenceLoadResult<Value> {
 }
 
 enum PersistenceDiagnostics {
+    /// Category for the entries mirrored into 设置 → 诊断日志.
+    static let logCategory = "本机存储"
+
     private static let logger = Logger(
         subsystem: "dev.infinityf4p.tiebapure",
         category: "Persistence"
     )
 
+    /// Reports a store failure to OSLog *and* to the log the user can export.
+    ///
+    /// These failures used to reach OSLog only, which cannot be read from the
+    /// phone: a store that never opened showed up as an unrelated draft error
+    /// with a retry button that could never work, and no device could report
+    /// why. Recording stays best-effort — it must never throw or block.
     static func report(_ error: Error, operation: String) {
         logger.error("\(operation, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+        guard AppLog.isEnabled else { return }
+        let message = "\(operation)：\(String(describing: error))"
+        Task { await AppLog.shared.record(.error, Self.logCategory, message) }
     }
 }
 
