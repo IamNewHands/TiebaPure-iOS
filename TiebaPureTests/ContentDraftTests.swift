@@ -186,6 +186,72 @@ final class ContentDraftTests: XCTestCase {
     }
 
     @MainActor
+    func testSummariesListOneAccountNewestFirst() async throws {
+        let store = ContentDraftStore(modelContainer: try makeInMemoryModelContainer())
+        let firstTarget = makeTarget(threadID: 100)
+        let secondTarget = makeTarget(threadID: 200)
+
+        XCTAssertTrue(store.save(
+            accountID: "account-a",
+            target: firstTarget,
+            title: "A1",
+            body: "first",
+            images: [],
+            updatedAt: Date(timeIntervalSince1970: 10)
+        ))
+        XCTAssertTrue(store.save(
+            accountID: "account-a",
+            target: secondTarget,
+            title: "A2",
+            body: "second",
+            images: [],
+            updatedAt: Date(timeIntervalSince1970: 20)
+        ))
+        XCTAssertTrue(store.save(
+            accountID: "account-b",
+            target: firstTarget,
+            title: "B1",
+            body: "third",
+            images: [],
+            updatedAt: Date(timeIntervalSince1970: 30)
+        ))
+
+        let summaries = try await store.summaries(accountID: "account-a")
+
+        XCTAssertEqual(summaries.count, 2, "只列这个账号的草稿")
+        XCTAssertEqual(summaries.map(\.title), ["A2", "A1"], "新的排在前面")
+        XCTAssertEqual(summaries[0].target.draftKey, secondTarget.draftKey)
+        XCTAssertEqual(summaries[0].body, "second")
+        XCTAssertEqual(summaries[0].updatedAt, Date(timeIntervalSince1970: 20))
+        XCTAssertEqual(summaries[0].prompt, secondTarget.prompt)
+        XCTAssertFalse(summaries[0].hasAttachments)
+    }
+
+    @MainActor
+    func testSummariesCountAttachmentsAndFollowDeletion() async throws {
+        let store = ContentDraftStore(modelContainer: try makeInMemoryModelContainer())
+        let target = makeTarget()
+
+        try await store.saveAsync(
+            accountID: "account",
+            target: target,
+            title: "标题",
+            body: "正文",
+            images: [makeImage(64)],
+            updatedAt: Date(timeIntervalSince1970: 5)
+        )
+
+        var summaries = try await store.summaries(accountID: "account")
+        XCTAssertEqual(summaries.count, 1)
+        XCTAssertTrue(summaries[0].hasAttachments, "带图片的草稿要在列表里标出来")
+        XCTAssertGreaterThan(summaries[0].attachmentByteCount, 0)
+
+        XCTAssertTrue(store.delete(accountID: "account", target: target))
+        summaries = try await store.summaries(accountID: "account")
+        XCTAssertTrue(summaries.isEmpty, "删掉之后列表里不能还留着这一份")
+    }
+
+    @MainActor
     func testImagesRoundTrip() throws {
         let store = ContentDraftStore(modelContainer: try makeInMemoryModelContainer())
         let target = makeTarget()

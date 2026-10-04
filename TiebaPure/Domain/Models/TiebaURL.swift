@@ -10,6 +10,38 @@ enum TiebaURL {
         secureRemoteURL(value)
     }
 
+    /// Forum avatars reach the app in two shapes across endpoints: an absolute
+    /// (signed) CDN URL, or a bare portrait token. `make` only accepts the
+    /// first, so a token-shaped avatar used to be dropped silently and the row
+    /// fell back to an initial letter even though the service had sent an image.
+    ///
+    /// The portrait normalizer runs first because it is a superset: it accepts
+    /// both shapes and it also moves the deprecated `tb.himg.baidu.com` host to
+    /// `himg.bdimg.com`, which plain `make` leaves in place.
+    static func forumAvatar(_ value: String?) -> URL? {
+        avatar(value) ?? make(value)
+    }
+
+    /// A leak-free description of a value that would not become a URL: enough to
+    /// see which shape the service sent, without copying a signed token into the
+    /// user's diagnostic log.
+    static func shapeDescription(_ value: String?) -> String {
+        guard let text = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              text.isEmpty == false else {
+            return "空值"
+        }
+        let prefix: String
+        if let separator = text.range(of: "://") {
+            prefix = String(text[text.startIndex..<separator.lowerBound]) + "://"
+        } else if text.hasPrefix("//") {
+            prefix = "//"
+        } else {
+            prefix = "无协议"
+        }
+        let spaceNote = text.contains(" ") ? " 含空格" : ""
+        return "\(prefix) 长度\(text.count)\(spaceNote)"
+    }
+
     private static func secureRemoteURL(_ value: String?) -> URL? {
         guard var text = value?.trimmingCharacters(in: .whitespacesAndNewlines), text.isEmpty == false else {
             return nil

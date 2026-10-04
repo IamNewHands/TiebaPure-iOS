@@ -95,6 +95,18 @@ struct MeView: View {
                         .accessibilityLabel("我的回帖")
                         .accessibilityHint("查看并逐条删除这个账号发过的回复")
                         .accessibilityIdentifier("my-replies-entry")
+
+                        Button {
+                            navigationPath.append(.myDrafts)
+                        } label: {
+                            Label("我的草稿", systemImage: "doc.text")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("我的草稿")
+                        .accessibilityHint("查看本机保存的草稿，并逐条删除")
+                        .accessibilityIdentifier("my-drafts-entry")
                     }
                 } else {
                     Section("账号") {
@@ -244,6 +256,14 @@ struct MeView: View {
             if let account {
                 MyRepliesView(account: account, openThreadInParent: openThread)
             }
+        case .myDrafts:
+            if let account {
+                MyDraftsView(
+                    account: account,
+                    openThreadInParent: openThread,
+                    openForumInParent: openForum
+                )
+            }
         case .followedUsers:
             if let account {
                 FollowedUsersView(account: account, openUserInParent: { user in
@@ -325,6 +345,7 @@ enum MeNavigationRoute: Hashable {
     case followedForums
     case followedUsers
     case myReplies
+    case myDrafts
     case threadFavorites
     case browsingHistory
     case settings
@@ -418,13 +439,31 @@ struct MyRepliesView: View {
                 List {
                     Section {
                         ForEach(replies) { reply in
-                            Button {
-                                openThread(reply)
-                            } label: {
-                                row(reply)
+                            HStack(spacing: TiebaPureTheme.Spacing.sm) {
+                                Button {
+                                    openThread(reply)
+                                } label: {
+                                    row(reply)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("my-reply-\(reply.id)")
+
+                                // A visible delete control: the row is a
+                                // navigation button, so a swipe alone left the
+                                // list looking like it had no way to delete.
+                                Button {
+                                    pendingDeletion = reply
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.body)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.red)
+                                .accessibilityLabel("删除这条回复")
+                                .accessibilityIdentifier("my-reply-delete-\(reply.id)")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("my-reply-\(reply.id)")
                             .swipeActions(edge: .trailing) {
                                 Button("删除", role: .destructive) {
                                     pendingDeletion = reply
@@ -432,7 +471,7 @@ struct MyRepliesView: View {
                             }
                         }
                     } footer: {
-                        Text("左滑一条回复可以删除它。删除只影响这一条回复，不会动主题帖。")
+                        Text("点右侧垃圾桶或左滑一条回复可以删除它。删除只影响这一条回复，不会动主题帖。")
                     }
 
                     if hasMore {
@@ -529,12 +568,19 @@ struct MyRepliesView: View {
         return String(text.prefix(60))
     }
 
+    /// Opens the thread at the reply itself, not just the thread.
+    ///
+    /// The reply's own post ID is a floor, so the thread screen loads the page
+    /// holding it and scrolls there. A 楼中楼 reply's ID is not a floor — the
+    /// feed reports `post_type = 1` for those — so it opens the thread without a
+    /// target rather than asking for a floor that does not exist.
     private func openThread(_ reply: OwnReply) {
         guard reply.threadID > 0 else { return }
         openThreadInParent(
             ReaderSplitThreadRoute(
                 threadID: reply.threadID,
-                forumID: reply.forumID > 0 ? reply.forumID : nil
+                forumID: reply.forumID > 0 ? reply.forumID : nil,
+                initialPostID: reply.isSubpost ? nil : reply.id
             )
         )
     }
@@ -596,5 +642,229 @@ struct MyRepliesView: View {
         } catch {
             actionError = ReaderErrorMessage.message(for: error)
         }
+    }
+}
+
+/// 我的草稿: every draft this account holds on this device.
+///
+/// A draft was only reachable by opening the editor for that exact target, so a
+/// draft kept "just in case" could neither be found nor removed. This lists them
+/// with where each one would be posted, and deletes one at a time.
+struct MyDraftsView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+
+    let account: Account
+    let openThreadInParent: (ReaderSplitThreadRoute) -> Void
+    let openForumInParent: (Forum) -> Void
+
+    @State private var drafts: [ContentDraftSummary] = []
+    @State private var isLoading = false
+    @State private var didLoad = false
+    @State private var errorMessage: String?
+    @State private var pendingDeletion: ContentDraftSummary?
+    @State private var actionError: String?
+
+    var body: some View {
+        Group {
+            if isLoading, drafts.isEmpty {
+                ReaderStateView.loading("正在读取本机草稿")
+                    .frame(minHeight: 220)
+                    .background(Color(uiColor: .systemBackground))
+            } else if let errorMessage, drafts.isEmpty {
+                ReaderStateView.error(message: errorMessage) {
+                    Task { await load() }
+                }
+                .frame(minHeight: 220)
+                .background(Color(uiColor: .systemBackground))
+            } else if drafts.isEmpty {
+                ReaderStateView.empty(
+                    title: "本机没有草稿",
+                    message: "编辑器里「保存草稿」保存的内容会出现在这里。"
+                )
+                .frame(minHeight: 220)
+                .background(Color(uiColor: .systemBackground))
+                .accessibilityIdentifier("my-drafts-empty")
+            } else {
+                List {
+                    Section {
+                        ForEach(drafts) { draft in
+                            HStack(spacing: TiebaPureTheme.Spacing.sm) {
+                                Button {
+                                    open(draft)
+                                } label: {
+                                    row(draft)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("my-draft-\(draft.target.draftKey)")
+
+                                Button {
+                                    pendingDeletion = draft
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.body)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.red)
+                                .accessibilityLabel("删除这份草稿")
+                                .accessibilityIdentifier("my-draft-delete-\(draft.target.draftKey)")
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button("删除", role: .destructive) {
+                                    pendingDeletion = draft
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text("点右侧垃圾桶或左滑可以删除一份草稿；删除只影响本机这份草稿。")
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .refreshable { await load() }
+            }
+        }
+        .navigationTitle("我的草稿")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadIfNeeded() }
+        .confirmationDialog(
+            "删除这份草稿？",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if $0 == false { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let draft = pendingDeletion {
+                Button("删除草稿", role: .destructive) {
+                    delete(draft)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            if let draft = pendingDeletion {
+                Text("将删除「\(draft.prompt)」的本机草稿：\n\(preview(draft))")
+            }
+        }
+        .alert(
+            "操作失败",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if $0 == false { actionError = nil } }
+            )
+        ) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "")
+        }
+    }
+
+    private func row(_ draft: ContentDraftSummary) -> some View {
+        VStack(alignment: .leading, spacing: TiebaPureTheme.Spacing.xxs) {
+            HStack(spacing: TiebaPureTheme.Spacing.xs) {
+                Text(draft.prompt)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(TiebaPureTheme.ColorToken.primaryAccent)
+                    .lineLimit(2)
+
+                Spacer(minLength: TiebaPureTheme.Spacing.xs)
+
+                Text(ReaderDateText.string(from: draft.updatedAt))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                Text(draft.title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(preview(draft))
+                .font(.body)
+                .foregroundStyle(.primary)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if draft.hasAttachments {
+                Text("含图片附件（\(byteCountText(draft.attachmentByteCount))）")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, TiebaPureTheme.Spacing.xxs)
+        .contentShape(Rectangle())
+    }
+
+    private func preview(_ draft: ContentDraftSummary) -> String {
+        let text = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == false else { return "（无文字内容）" }
+        return String(text.prefix(80))
+    }
+
+    private func byteCountText(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    /// Opens what the draft is about: the thread it replies to, or the forum it
+    /// would post in. The editor itself is only opened from the entry point the
+    /// draft belongs to, which knows the reply context.
+    private func open(_ draft: ContentDraftSummary) {
+        let target = draft.target
+        if let threadID = target.threadID, threadID > 0 {
+            openThreadInParent(
+                ReaderSplitThreadRoute(
+                    threadID: threadID,
+                    forumID: target.forumID > 0 ? target.forumID : nil
+                )
+            )
+        } else if target.forumID > 0 {
+            openForumInParent(
+                Forum(
+                    id: target.forumID,
+                    name: target.forumName,
+                    displayName: target.forumDisplayName,
+                    avatarURL: ForumAvatarIndex.shared.url(for: target.forumID),
+                    memberCount: 0,
+                    threadCount: 0
+                )
+            )
+        }
+    }
+
+    private func loadIfNeeded() async {
+        guard didLoad == false else { return }
+        didLoad = true
+        await load()
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            drafts = try await environment.contentDraftStore.summaries(accountID: account.id)
+        } catch is CancellationError {
+            return
+        } catch {
+            errorMessage = ReaderErrorMessage.message(for: error)
+        }
+    }
+
+    private func delete(_ draft: ContentDraftSummary) {
+        pendingDeletion = nil
+        guard environment.contentDraftStore.delete(
+            accountID: draft.accountID,
+            target: draft.target
+        ) else {
+            actionError = "本机草稿删除失败，草稿仍然保留。"
+            return
+        }
+        drafts.removeAll { $0.id == draft.id }
     }
 }

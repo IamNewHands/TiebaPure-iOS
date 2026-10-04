@@ -109,6 +109,7 @@ enum UserProfileMapper {
                         threadID: thread.threadID,
                         threadTitle: thread.title.trimmingCharacters(in: .whitespacesAndNewlines),
                         body: replyBody(from: reply.contents),
+                        isSubpost: reply.postType != 0,
                         createdAt: reply.createTime == 0
                             ? nil
                             : Date(timeIntervalSince1970: TimeInterval(reply.createTime))

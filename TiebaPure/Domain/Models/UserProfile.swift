@@ -103,6 +103,10 @@ struct OwnReply: Identifiable, Equatable, Hashable, Sendable {
     var threadTitle: String
     /// The reply's own text.
     var body: String
+    /// True for a 楼中楼 reply. Its post ID is not a floor, so opening the
+    /// thread at that ID has nothing to land on; those rows open the thread
+    /// itself instead.
+    var isSubpost: Bool = false
     var createdAt: Date? = nil
 }
 

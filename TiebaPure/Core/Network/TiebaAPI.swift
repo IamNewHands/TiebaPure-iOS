@@ -405,7 +405,12 @@ extension TiebaAPI {
         let forums = response.forums.map(ForumMapper.fromFollowedForum)
         // The only endpoint that returns avatars for the whole followed list.
         // Handing them to the index is what lets a profile page show them.
-        ForumAvatarIndex.shared.store(forums: forums)
+        let storedAvatarCount = ForumAvatarIndex.shared.store(forums: forums)
+        await AppLog.shared.record(
+            .info,
+            "关注吧头像",
+            "关注的吧列表 \(forums.count) 条，存入 \(storedAvatarCount) 个头像"
+        )
         return forums
     }
 

@@ -6,7 +6,7 @@ enum ForumMapper {
             id: dto.id,
             name: dto.name,
             displayName: dto.name,
-            avatarURL: TiebaURL.make(dto.avatar),
+            avatarURL: TiebaURL.forumAvatar(dto.avatar),
             memberCount: 0,
             threadCount: 0
         )

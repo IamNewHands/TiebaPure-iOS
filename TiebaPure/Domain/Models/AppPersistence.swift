@@ -128,28 +128,20 @@ enum AppModelContainer {
     /// replaced (fresh timestamp, near-empty file) apart from one that kept its
     /// rows, which no in-app screen can show.
     private static func storeFileSummary() -> String {
-        guard let directory = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
-            return "定位不到 Application Support"
-        }
         let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
         var parts: [String] = []
-        for name in ["default.store", "default.store-shm", "default.store-wal"] {
-            let url = directory.appendingPathComponent(name, isDirectory: false)
+        for configuration in sharedResolution.container.configurations {
+            let url = configuration.url
+            let name = "\(url.deletingLastPathComponent().lastPathComponent)/\(url.lastPathComponent)"
             guard let values = try? url.resourceValues(forKeys: keys),
-                  let size = values.fileSize else { continue }
+                  let size = values.fileSize else {
+                parts.append("\(name)=不存在")
+                continue
+            }
             parts.append("\(name)=\(size)B@\(timestamp(values.contentModificationDate))")
         }
-        guard parts.isEmpty else { return parts.joined(separator: " ") }
-        // Without a default store, name whatever else is in the directory so a
-        // store living under an unexpected name cannot hide behind this line.
-        let listing = (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?
-            .sorted()
-            .prefix(12)
-            .joined(separator: ",") ?? ""
-        return "没有 default.store；Application Support=[\(listing)]"
+        guard parts.isEmpty else { return parts.sorted().joined(separator: " ") }
+        return "容器没有报告 store 路径"
     }
 
     private static func timestamp(_ date: Date?) -> String {

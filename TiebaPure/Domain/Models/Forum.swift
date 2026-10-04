@@ -49,7 +49,7 @@ final class ForumAvatarIndex: @unchecked Sendable {
 
     private let lock = NSLock()
     private var urlsByForumID: [Int64: URL] = [:]
-    private var hasLoaded = false
+    private var hasAttemptedFetch = false
 
     func url(for forumID: Int64) -> URL? {
         lock.lock()
@@ -64,31 +64,53 @@ final class ForumAvatarIndex: @unchecked Sendable {
         return urlsByForumID
     }
 
-    /// Whether any endpoint has delivered avatars in this session. A failed or
-    /// never-attempted load keeps this `false`, so the next reader retries.
-    var needsLoad: Bool {
+    /// True only when the index actually holds at least one avatar.
+    ///
+    /// Deliberately not "an endpoint answered": a guide page whose rows all
+    /// failed to parse would otherwise look loaded, and the full followed-forum
+    /// list — which carries the same avatars in a different shape — would never
+    /// be tried, leaving the profile on initial letters forever.
+    var hasData: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return hasLoaded == false
+        return urlsByForumID.isEmpty == false
     }
 
-    func store(forums: [Forum]) {
+    /// Whether a caller already tried the full-list fetch this session. It
+    /// keeps a genuinely avatar-less account from refetching on every profile
+    /// view while still retrying after a failed request.
+    var needsFetch: Bool {
         lock.lock()
         defer { lock.unlock() }
-        for forum in forums {
-            guard let avatarURL = forum.avatarURL else { continue }
-            urlsByForumID[forum.id] = avatarURL
-        }
-        hasLoaded = true
+        return urlsByForumID.isEmpty && hasAttemptedFetch == false
     }
 
-    func store(statuses: [FollowedForumStatus]) {
+    func markFetchAttempted() {
         lock.lock()
         defer { lock.unlock() }
-        for status in statuses {
-            guard let avatarURL = status.avatarURL else { continue }
-            urlsByForumID[status.forumID] = avatarURL
+        hasAttemptedFetch = true
+    }
+
+    @discardableResult
+    func store(forums: [Forum]) -> Int {
+        store(urls: forums.compactMap { forum in
+            forum.avatarURL.map { (forum.id, $0) }
+        })
+    }
+
+    @discardableResult
+    func store(statuses: [FollowedForumStatus]) -> Int {
+        store(urls: statuses.compactMap { status in
+            status.avatarURL.map { (status.forumID, $0) }
+        })
+    }
+
+    private func store(urls: [(Int64, URL)]) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        for (forumID, url) in urls {
+            urlsByForumID[forumID] = url
         }
-        hasLoaded = true
+        return urls.count
     }
 }

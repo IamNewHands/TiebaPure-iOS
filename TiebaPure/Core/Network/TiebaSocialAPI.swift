@@ -428,7 +428,7 @@ extension TiebaAPI {
                     forumID: forum.forumID,
                     level: max(forum.level, 0),
                     isSignedToday: forum.isSignedToday,
-                    avatarURL: TiebaURL.make(forum.avatar)
+                    avatarURL: TiebaURL.forumAvatar(forum.avatar)
                 )
             }
 
@@ -439,6 +439,26 @@ extension TiebaAPI {
                     + "原始\(response.forums.count)条 有效\(decoded.count)条 "
                     + "等级分布=\(Self.levelHistogram(decoded))"
             )
+
+            // Every row carries an avatar string, so a page that yields no
+            // usable URL means the shape is not what the normalizer expects.
+            // Record the shape (never the value) instead of leaving the list on
+            // initial letters with no explanation.
+            let rawAvatarCount = response.forums.filter {
+                ($0.avatar?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            }.count
+            let parsedAvatarCount = decoded.filter { $0.avatarURL != nil }.count
+            if rawAvatarCount > 0, parsedAvatarCount == 0 {
+                let firstRawAvatar = response.forums
+                    .first { $0.avatar?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }?
+                    .avatar
+                await AppLog.shared.record(
+                    .warning,
+                    "关注吧头像",
+                    "第\(page)页 服务端给了 \(rawAvatarCount) 个头像，但没有一个能变成 URL；"
+                        + "样例形态 \(TiebaURL.shapeDescription(firstRawAvatar))"
+                )
+            }
 
             // A first page without the list is either an account with no
             // followed forums or a field-name miss — the line above carries the
@@ -467,7 +487,12 @@ extension TiebaAPI {
         )
         // These rows already carry every followed forum's avatar, so the
         // profile's 关注的吧 list can show real images without another request.
-        ForumAvatarIndex.shared.store(statuses: statuses)
+        let storedAvatarCount = ForumAvatarIndex.shared.store(statuses: statuses)
+        await AppLog.shared.record(
+            .info,
+            "关注吧头像",
+            "进吧等级存入 \(storedAvatarCount)/\(statuses.count) 个头像"
+        )
         return statuses
     }
 

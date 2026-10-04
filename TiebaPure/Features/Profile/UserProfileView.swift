@@ -519,7 +519,7 @@ struct UserProfileView: View {
             }
             .background(Color(uiColor: .systemBackground))
             .task(id: profile.user.id) {
-                await loadForumAvatarsIfNeeded()
+                await loadForumAvatarsIfNeeded(profile.followedForums)
             }
         }
     }
@@ -531,20 +531,33 @@ struct UserProfileView: View {
         forumAvatarURLs[forum.id] ?? forum.avatarURL
     }
 
-    /// One request per session fills the avatars of every followed forum. A
-    /// failure keeps the index unloaded, so the next profile view tries again
-    /// instead of keeping initials for the rest of the session.
-    private func loadForumAvatarsIfNeeded() async {
-        // Another screen may already have filled the shared index, in which
-        // case there is nothing to fetch — only something to publish.
+    /// Fills in the avatars of the rows on screen.
+    ///
+    /// The shared index usually already has them from the 进吧 hub. When it does
+    /// not — or when its rows could not be turned into URLs — this asks the
+    /// followed-forum list endpoint, which carries the same avatars in a
+    /// different shape, once per session. The count line is what tells the two
+    /// apart on a device: rows without a forum ID, rows whose avatar did not
+    /// parse, and a genuinely avatar-less account all look the same on screen.
+    private func loadForumAvatarsIfNeeded(_ forums: [Forum]) async {
         let cached = ForumAvatarIndex.shared.snapshot
         if cached.isEmpty == false {
             forumAvatarURLs = cached
         }
-        guard let account, ForumAvatarIndex.shared.needsLoad else { return }
-        guard let forums = try? await environment.api.followedForums(account: account) else { return }
-        ForumAvatarIndex.shared.store(forums: forums)
-        forumAvatarURLs = ForumAvatarIndex.shared.snapshot
+        if ForumAvatarIndex.shared.needsFetch, let account {
+            ForumAvatarIndex.shared.markFetchAttempted()
+            if let fetched = try? await environment.api.followedForums(account: account) {
+                ForumAvatarIndex.shared.store(forums: fetched)
+                forumAvatarURLs = ForumAvatarIndex.shared.snapshot
+            }
+        }
+        await AppLog.shared.record(
+            .info,
+            "关注吧头像",
+            "关注的吧 \(forums.count) 行，带吧 id 的 \(forums.filter { $0.id > 0 }.count) 行，"
+                + "命中头像 \(forums.filter { forumAvatarURL(for: $0) != nil }.count) 行，"
+                + "缓存 \(forumAvatarURLs.count) 条"
+        )
     }
 
     // The loaded profile carries the authoritative user id; before it arrives

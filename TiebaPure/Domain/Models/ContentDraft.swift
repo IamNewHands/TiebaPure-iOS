@@ -1311,8 +1311,60 @@ final class ContentDraftStore {
         persistence.clear(accountID: accountID)
     }
 
+    /// Every draft this account holds, newest first, for 我的草稿.
+    ///
+    /// Built from the record enumeration the migration path already needs —
+    /// a manifest of identities plus one read per record — so no backend had to
+    /// grow an API for a list screen. Attachment bytes are only counted, never
+    /// decoded: a draft can carry megabytes of images and this runs on the main
+    /// actor.
+    func summaries(accountID: String) async throws -> [ContentDraftSummary] {
+        let manifest = try await persistence.migrationManifest()
+        var summaries: [ContentDraftSummary] = []
+        for entry in manifest.entries where entry.accountID == accountID {
+            try Task.checkCancellation()
+            let record = try await persistence.migrationRecord(identity: entry.identity)
+            guard let target = try? JSONDecoder().decode(
+                ContentSubmissionTarget.self,
+                from: record.targetData
+            ), target.draftKey == record.targetKey else {
+                continue
+            }
+            summaries.append(
+                ContentDraftSummary(
+                    accountID: record.accountID,
+                    target: target,
+                    title: record.title,
+                    body: record.body,
+                    updatedAt: record.updatedAt,
+                    attachmentByteCount: entry.imagesByteCount
+                )
+            )
+        }
+        return summaries.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     @discardableResult
     func repairLegacyMetadataAndPruneAsync() async -> Bool {
         await persistence.repairLegacyMetadataAndPruneAsync()
     }
+}
+
+/// One stored draft as 我的草稿 needs it: where it would be posted, what it
+/// says, and how much attachment data it holds.
+struct ContentDraftSummary: Identifiable, Equatable, Sendable {
+    let accountID: String
+    let target: ContentSubmissionTarget
+    let title: String
+    let body: String
+    let updatedAt: Date
+    /// Encoded attachment size. The list never decodes the images themselves.
+    let attachmentByteCount: Int
+
+    var id: String { "\(accountID)\u{1f}\(target.draftKey)" }
+
+    var hasAttachments: Bool { attachmentByteCount > 0 }
+
+    /// The same label the editor shows for this target.
+    var prompt: String { target.prompt }
 }

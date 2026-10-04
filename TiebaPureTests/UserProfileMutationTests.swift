@@ -564,6 +564,8 @@ final class UserProfileMutationTests: XCTestCase {
         XCTAssertEqual(page.replies[1].id, 2002, "字符串形式的回复 ID 也要解出来")
         XCTAssertNil(page.replies[1].createdAt, "时间戳为 0 时不能编出一个日期")
         XCTAssertEqual(page.replies[1].body, "［非文字内容］", "纯图片回复不能显示成空行")
+        XCTAssertFalse(page.replies[0].isSubpost, "post_type=0 是楼层回复，可以定位到楼")
+        XCTAssertTrue(page.replies[1].isSubpost, "post_type=1 是楼中楼，没有对应的楼层可跳")
         XCTAssertTrue(page.hasMore)
         XCTAssertEqual(page.visibility, .visible)
     }
@@ -1397,6 +1399,7 @@ private let profileMutationReplyFeedJSON = """
         {
           "post_id": 2001,
           "create_time": 1700000000,
+          "post_type": 0,
           "post_content": [
             { "type": 0, "text": "第一条" },
             { "type": 0, "text": "回复" }
@@ -1405,6 +1408,7 @@ private let profileMutationReplyFeedJSON = """
         {
           "post_id": "2002",
           "create_time": 0,
+          "post_type": 1,
           "post_content": [ { "type": 3, "text": "" } ]
         }
       ]

@@ -133,9 +133,10 @@ final class FollowedForumStatusTests: XCTestCase {
 
     func testForumAvatarIndexAnswersByForumIDOnly() {
         let index = ForumAvatarIndex()
-        XCTAssertTrue(index.needsLoad)
+        XCTAssertTrue(index.needsFetch)
+        XCTAssertFalse(index.hasData)
 
-        index.store(forums: [
+        let stored = index.store(forums: [
             Forum(
                 id: 7,
                 name: "壁纸",
@@ -147,23 +148,68 @@ final class FollowedForumStatusTests: XCTestCase {
             Forum(id: 8, name: "无图", displayName: "无图吧", avatarURL: nil, memberCount: 0, threadCount: 0)
         ])
 
+        XCTAssertEqual(stored, 1, "没有头像的行不算存进去")
         XCTAssertEqual(
             index.url(for: 7),
             URL(string: "https://himg.bdimg.com/sys/portraitn/item/seven")
         )
         XCTAssertNil(index.url(for: 8), "接口没给头像的行不能凭空补一个")
         XCTAssertNil(index.url(for: 99), "没见过的吧不能借用别的头像")
-        XCTAssertFalse(index.needsLoad, "已经拉过一次就不再重复请求")
+        XCTAssertTrue(index.hasData)
+        XCTAssertFalse(index.needsFetch, "已经有头像了就不再重复请求")
         XCTAssertEqual(index.snapshot.count, 1)
     }
 
-    func testForumAvatarIndexTreatsAnAvatarlessAnswerAsLoaded() {
+    func testForumAvatarIndexKeepsTryingWhenAnAnswerCarriesNoUsableAvatar() {
+        // The guide page answers with an avatar string on every row. If none of
+        // them becomes a URL, the index must stay "no data" so the profile can
+        // still try the followed-forum list — treating the answer as loaded is
+        // what left the list on initial letters with nothing in the log.
         let index = ForumAvatarIndex()
 
-        index.store(statuses: [FollowedForumStatus(forumID: 9, level: 1, isSignedToday: false)])
+        let stored = index.store(statuses: [
+            FollowedForumStatus(forumID: 9, level: 1, isSignedToday: false)
+        ])
 
-        XCTAssertFalse(index.needsLoad, "接口答过就算答过，不能每次进主页都重发请求")
+        XCTAssertEqual(stored, 0)
+        XCTAssertFalse(index.hasData)
+        XCTAssertTrue(index.needsFetch)
         XCTAssertNil(index.url(for: 9))
+
+        // A caller that already tried the full-list fetch does not repeat it.
+        index.markFetchAttempted()
+        XCTAssertFalse(index.needsFetch)
+        XCTAssertFalse(index.hasData)
+    }
+
+    func testForumAvatarNormalizerAcceptsBothShapes() {
+        XCTAssertEqual(
+            TiebaURL.forumAvatar("https://himg.bdimg.com/sys/portraitn/item/abc123"),
+            URL(string: "https://himg.bdimg.com/sys/portraitn/item/abc123"),
+            "绝对 URL 原样使用"
+        )
+        XCTAssertEqual(
+            TiebaURL.forumAvatar("http://tb.himg.baidu.com/sys/portrait/item/abc123"),
+            URL(string: "https://himg.bdimg.com/sys/portrait/item/abc123"),
+            "老 http 头像要升到 https 并换掉已废弃的主机"
+        )
+        XCTAssertEqual(
+            TiebaURL.forumAvatar("abc123"),
+            URL(string: "https://himg.bdimg.com/sys/portrait/item/abc123"),
+            "裸 portrait token 也要能拼出来，否则整列都会退回首字"
+        )
+        XCTAssertNil(TiebaURL.forumAvatar("   "))
+    }
+
+    func testForumAvatarShapeDescriptionNeverCopiesTheValue() {
+        let token = "https://himg.bdimg.com/sys/portraitn/item/verysecret?sign=abcdef123456"
+        let description = TiebaURL.shapeDescription(token)
+
+        XCTAssertTrue(description.contains("https://"))
+        XCTAssertTrue(description.contains("长度"))
+        XCTAssertFalse(description.contains("sign"), "诊断日志不能把签名串抄进去")
+        XCTAssertFalse(description.contains("verysecret"))
+        XCTAssertEqual(TiebaURL.shapeDescription("  "), "空值")
     }
 
     func testTileLabelReadsLevelAndCheckInAsOneSentence() {

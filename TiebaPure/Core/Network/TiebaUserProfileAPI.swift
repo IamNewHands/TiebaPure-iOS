@@ -625,11 +625,15 @@ struct UserPostFeedDTO: Decodable {
     struct ReplyDTO: Decodable {
         var postID: UInt64
         var createTime: Int
+        /// 0 = floor reply, 1 = 楼中楼. Only a floor reply's ID can be used to
+        /// open the thread at that reply.
+        var postType: Int
         var contents: [ContentDTO]
 
         enum CodingKeys: String, CodingKey {
             case postID = "post_id"
             case createTime = "create_time"
+            case postType = "post_type"
             case contents = "post_content"
         }
 
@@ -637,6 +641,7 @@ struct UserPostFeedDTO: Decodable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             postID = container.flexibleUInt64(forKey: .postID)
             createTime = container.flexibleIntValue(forKey: .createTime)
+            postType = container.flexibleIntValue(forKey: .postType)
             contents = (try? container.decodeIfPresent([ContentDTO].self, forKey: .contents)) ?? []
         }
     }
