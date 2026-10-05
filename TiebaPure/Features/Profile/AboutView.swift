@@ -3,6 +3,10 @@ import SwiftUI
 struct AboutView: View {
     private let sourceURL = URL(string: "https://github.com/infinityf4p/TiebaPure-iOS")!
     private let authorURL = URL(string: "https://github.com/infinityf4p")!
+    /// The repository this installed build came from. The upstream project is
+    /// the source, but the build on this device is the maintainer's, and that
+    /// is where its unsigned packages are published — so both belong here.
+    private let maintenanceURL = URL(string: "https://github.com/IamNewHands/TiebaPure-iOS")!
     private let gplURL = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!
     private let swiftProtobufLicenseURL = URL(
         string: "https://github.com/apple/swift-protobuf/blob/1.38.1/LICENSE.txt"
@@ -14,6 +18,10 @@ struct AboutView: View {
                 LabeledContent("版本", value: versionText)
                 LabeledContent("项目作者") {
                     Link("infinityf4p", destination: authorURL)
+                }
+                LabeledContent("维护仓库") {
+                    Link("IamNewHands/TiebaPure-iOS", destination: maintenanceURL)
+                        .accessibilityHint("在浏览器打开本应用维护者的仓库，未签名安装包在那里发布")
                 }
                 Text("以浏览为主的非官方百度贴吧客户端；登录后支持关注、点赞，以及实验性的发帖与回复。与百度公司及贴吧官方无隶属、授权或认可关系。")
                     .fixedSize(horizontal: false, vertical: true)
