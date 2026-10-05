@@ -1,1 +1,4 @@
 LICENSES/SwiftProtobuf-Apache-2.0.txt -whitespace
+*.sh text eol=lf
+*.yml text eol=lf
+

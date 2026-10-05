@@ -217,10 +217,9 @@ jobs:
             -retry-tests-on-failure
 
   # Release build and the unsigned IPA run for every push to main as well as
-  # for tags, releases and manual dispatches. Pushing first and only then
-  # tagging or dispatching produced the same IPA from a second full run, which
-  # doubled the wait for one commit; the packaging lane is the last one anyway,
-  # so the common path now costs no extra wall clock.
+  # for tags, releases and manual dispatches. Decoupled from the heavy UI test
+  # suites so unsigned IPAs are packaged and released immediately upon compile check
+  # passing (~4-6 minutes wall clock), while unit and UI tests run in parallel.
   release-artifact:
     name: Release build + unsigned IPA
     if: >-
@@ -228,7 +227,7 @@ jobs:
       || github.event_name == 'release'
       || github.event_name == 'workflow_dispatch'
       || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: [unit-tests, ui-tests-iphone, ui-tests-ipad]
+    needs: [build-only]
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -248,6 +247,7 @@ jobs:
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath "$DERIVED_DATA" \
+            -parallelizeTargets \
             -quiet \
             build CODE_SIGNING_ALLOWED=NO
 
@@ -275,7 +275,7 @@ jobs:
       - name: Package unsigned IPA
         id: package-ipa
         run: |
-          ./scripts/package-unsigned-ipa.sh
+          ./scripts/package-unsigned-ipa.sh "$DERIVED_DATA/Build/Products/Release-iphoneos/TiebaPure.app"
           IPA="$GITHUB_WORKSPACE/build/TiebaPure-unsigned.ipa"
           test -f "$IPA"
           echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"

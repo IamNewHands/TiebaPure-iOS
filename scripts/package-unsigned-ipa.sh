@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$ROOT/build"
 PACKAGE_ROOT="$BUILD_DIR/unsigned-ipa"
-DERIVED_DATA="${TIEBAPURE_DERIVED_DATA:-/private/tmp/TiebaPurePackageDerivedData}"
+PREBUILT_APP="${1:-${TIEBAPURE_APP_PATH:-}}"
+DERIVED_DATA="${TIEBAPURE_DERIVED_DATA:-${DERIVED_DATA:-/private/tmp/TiebaPurePackageDerivedData}}"
 ARCHIVE_PATH="$PACKAGE_ROOT/TiebaPure.xcarchive"
 PAYLOAD_DIR="$PACKAGE_ROOT/Payload"
 APP_NAME="TiebaPure.app"
@@ -58,24 +59,33 @@ mkdir -p "$PACKAGE_ROOT"
 rm -rf "$ARCHIVE_PATH" "$PAYLOAD_DIR" "$OUTPUT"
 mkdir -p "$PAYLOAD_DIR"
 
-xcodebuild \
-  -quiet \
-  -project "$ROOT/TiebaPure.xcodeproj" \
-  -scheme TiebaPure \
-  -configuration Release \
-  -sdk iphoneos \
-  -destination "generic/platform=iOS" \
-  -derivedDataPath "$DERIVED_DATA" \
-  -archivePath "$ARCHIVE_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY="" \
-  archive
+if [[ -n "$PREBUILT_APP" ]]; then
+  if [[ ! -d "$PREBUILT_APP" ]]; then
+    echo "Expected prebuilt app bundle not found: $PREBUILT_APP" >&2
+    exit 1
+  fi
+  APP_PATH="$PREBUILT_APP"
+else
+  xcodebuild \
+    -quiet \
+    -project "$ROOT/TiebaPure.xcodeproj" \
+    -scheme TiebaPure \
+    -configuration Release \
+    -sdk iphoneos \
+    -destination "generic/platform=iOS" \
+    -derivedDataPath "$DERIVED_DATA" \
+    -archivePath "$ARCHIVE_PATH" \
+    -parallelizeTargets \
+    CODE_SIGNING_ALLOWED=NO \
+    CODE_SIGNING_REQUIRED=NO \
+    CODE_SIGN_IDENTITY="" \
+    archive
 
-APP_PATH="$ARCHIVE_PATH/Products/Applications/$APP_NAME"
-if [[ ! -d "$APP_PATH" ]]; then
-  echo "Expected app bundle not found: $APP_PATH" >&2
-  exit 1
+  APP_PATH="$ARCHIVE_PATH/Products/Applications/$APP_NAME"
+  if [[ ! -d "$APP_PATH" ]]; then
+    echo "Expected app bundle not found: $APP_PATH" >&2
+    exit 1
+  fi
 fi
 
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" != "true" ]]; then
