@@ -3541,6 +3541,33 @@ final class TiebaPureSmokeTests: XCTestCase {
         ))
     }
 
+    func testSubpostSheetContentScrollLocksOnlyDuringHorizontalDismissal() {
+        XCTAssertTrue(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .tracking,
+            axis: .rightSwipe
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .tracking,
+            axis: .pullDown
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .idle,
+            axis: nil
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .idle,
+            axis: .rightSwipe
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .restoring,
+            axis: .rightSwipe
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .dismissing,
+            axis: .rightSwipe
+        ))
+    }
+
     func testAboutViewVersionFormatterFormatsShortAndBuildVersions() {
         XCTAssertEqual(
             AboutViewVersionFormatter.format(shortVersion: "1.4.14", buildVersion: "82"),

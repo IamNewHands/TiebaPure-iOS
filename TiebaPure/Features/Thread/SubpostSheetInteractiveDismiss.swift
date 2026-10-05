@@ -93,6 +93,30 @@ private extension EnvironmentValues {
     }
 }
 
+/// The dismiss drag and the sheet's scroll view recognize simultaneously, so
+/// the vertical part of a horizontal drag would otherwise keep scrolling the
+/// list while the surface is being dragged sideways. The flag below freezes the
+/// scroll view for exactly the phase in which the surface follows the finger
+/// along the horizontal dismissal axis.
+private struct SubpostSheetContentScrollLockKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var subpostSheetContentScrollLock: Bool {
+        get { self[SubpostSheetContentScrollLockKey.self] }
+        set { self[SubpostSheetContentScrollLockKey.self] = newValue }
+    }
+}
+
+private struct SubpostSheetContentScrollLockModifier: ViewModifier {
+    @Environment(\.subpostSheetContentScrollLock) private var isLocked
+
+    func body(content: Content) -> some View {
+        content.scrollDisabled(isLocked)
+    }
+}
+
 private struct SubpostSheetLegacyScrollTelemetryModifier: ViewModifier {
     @Environment(\.subpostSheetLegacyScrollTelemetryAction) private var action
 
@@ -112,6 +136,13 @@ private struct SubpostSheetLegacyScrollTelemetryModifier: ViewModifier {
 extension View {
     func subpostSheetLegacyScrollTelemetry() -> some View {
         modifier(SubpostSheetLegacyScrollTelemetryModifier())
+    }
+
+    /// Freezes this scroll view while the sheet's horizontal dismissal drag
+    /// owns the gesture, so the content cannot follow the vertical part of the
+    /// same finger movement. Re-enabled as soon as the drag ends or restores.
+    func subpostSheetContentScrollLock() -> some View {
+        modifier(SubpostSheetContentScrollLockModifier())
     }
 }
 
@@ -207,6 +238,13 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                                 containerSize: containerSize
                             )
                         }
+                    )
+                )
+                .environment(
+                    \.subpostSheetContentScrollLock,
+                    SubpostSheetContentScrollPolicy.locksScrolling(
+                        phase: phase,
+                        axis: activeDismissAxis
                     )
                 )
                 .simultaneousGesture(
@@ -715,6 +753,20 @@ private struct SubpostSheetTransparentHostInstaller: UIViewControllerRepresentab
             }
             return nil
         }
+    }
+}
+
+/// Decides when the sheet stops scrolling its own content. A right-swipe
+/// dismissal moves the surface horizontally, so the vertical part of the same
+/// finger movement must not reach the list; a pull-down dismissal keeps the
+/// scroll view live because reaching the content top is what starts it (and on
+/// iOS 16 the scroll view's own pan is the only signal that reports it).
+enum SubpostSheetContentScrollPolicy {
+    static func locksScrolling(
+        phase: SubpostSheetDismissPhase,
+        axis: SubpostSheetDismissAxis?
+    ) -> Bool {
+        phase == .tracking && axis == .rightSwipe
     }
 }
 

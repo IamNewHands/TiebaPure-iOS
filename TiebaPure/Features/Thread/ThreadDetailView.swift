@@ -3102,6 +3102,7 @@ private struct SubpostListSheet: View {
                     }
                     .coordinateSpace(name: SubpostSheetScrollCoordinateSpace.name)
                     .subpostSheetLegacyScrollTelemetry()
+                    .subpostSheetContentScrollLock()
                     .background(TiebaPureTheme.ColorToken.readerGroupedBackground)
                 }
                 }
