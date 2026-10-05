@@ -3475,6 +3475,20 @@ final class TiebaPureSmokeTests: XCTestCase {
             translation: CGSize(width: 20, height: 40)
         ))
         XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.horizontalOffset(
+                translationX: 120,
+                containerWidth: 390
+            ),
+            120
+        )
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.horizontalOffset(
+                translationX: 400,
+                containerWidth: 390
+            ),
+            280.8
+        )
+        XCTAssertEqual(
             SubpostRightSwipeDismissPolicy.verticalOffset(
                 translationX: 120,
                 containerHeight: 800
@@ -3510,6 +3524,33 @@ final class TiebaPureSmokeTests: XCTestCase {
             predictedTranslationX: 100,
             containerWidth: 390
         ))
+    }
+
+    func testAboutViewVersionFormatterFormatsShortAndBuildVersions() {
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: "1.4.14", buildVersion: "82"),
+            "1.4.14 (Built 82)"
+        )
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: "1.4.14", buildVersion: nil),
+            "1.4.14"
+        )
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: "1.4.14", buildVersion: ""),
+            "1.4.14"
+        )
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: "1.4.14", buildVersion: "   "),
+            "1.4.14"
+        )
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: nil, buildVersion: "82"),
+            "未知 (Built 82)"
+        )
+        XCTAssertEqual(
+            AboutViewVersionFormatter.format(shortVersion: "", buildVersion: ""),
+            "未知"
+        )
     }
 
     func testSubpostPullDownDismissRequiresContentToStartAtTop() {

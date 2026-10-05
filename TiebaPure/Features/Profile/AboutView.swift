@@ -60,7 +60,22 @@ struct AboutView: View {
     }
 
     private var versionText: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知"
+        AboutViewVersionFormatter.format(
+            shortVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            buildVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        )
+    }
+}
+
+enum AboutViewVersionFormatter {
+    static func format(shortVersion: String?, buildVersion: String?) -> String {
+        let short = (shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? shortVersion!.trimmingCharacters(in: .whitespacesAndNewlines)
+            : "未知"
+        if let build = buildVersion?.trimmingCharacters(in: .whitespacesAndNewlines), !build.isEmpty {
+            return "\(short) (Built \(build))"
+        }
+        return short
     }
 }
 

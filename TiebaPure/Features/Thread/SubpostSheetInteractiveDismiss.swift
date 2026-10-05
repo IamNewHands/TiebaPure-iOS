@@ -141,6 +141,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
     private let content: Content
 
     @State private var phase = SubpostSheetDismissPhase.idle
+    @State private var horizontalOffset: CGFloat = 0
     @State private var verticalOffset: CGFloat = 0
     @State private var rejectedCurrentGesture = false
     @State private var activeDismissAxis: SubpostSheetDismissAxis?
@@ -181,10 +182,10 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                 )
                 .accessibilityIdentifier("subpost-sheet-surface")
                 .contentShape(Rectangle())
-                .offset(y: verticalOffset)
+                .offset(x: horizontalOffset, y: verticalOffset)
                 .modifier(
                     SubpostLegacyAnimationCompletionObserver(
-                        observedValue: verticalOffset,
+                        observedValue: activeDismissAxis == .rightSwipe ? horizontalOffset : verticalOffset,
                         targetValue: legacyAnimationTarget,
                         generation: legacyAnimationGeneration,
                         completion: completeLegacyAnimation
@@ -193,7 +194,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                 .environment(
                     \.subpostSheetDismissAction,
                     SubpostSheetDismissAction {
-                        finishDismissal(containerHeight: containerSize.height)
+                        finishDismissal(containerSize: containerSize)
                     }
                 )
                 .environment(
@@ -213,22 +214,37 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                     isEnabled: isEnabled && phase != .dismissing
                 )
                 .accessibilityAction(named: "关闭楼中楼") {
-                    finishDismissal(containerHeight: containerSize.height)
+                    finishDismissal(containerSize: containerSize)
                 }
                 .compatibleOnChange(of: containerSize) { previousSize, newSize in
                     guard previousSize != newSize else { return }
                     if phase == .dismissing {
                         // Rotation during the short completion animation must
                         // never make an already-hidden surface visible again.
-                        let targetOffset = max(verticalOffset, newSize.height + 32)
-                        if #available(iOS 17.0, *) {
-                            verticalOffset = targetOffset
+                        if activeDismissAxis == .rightSwipe {
+                            let targetOffset = max(horizontalOffset, newSize.width + 32)
+                            if #available(iOS 17.0, *) {
+                                horizontalOffset = targetOffset
+                            } else {
+                                beginLegacyAnimation(
+                                    target: targetOffset,
+                                    axis: .rightSwipe,
+                                    animation: .easeIn(duration: reduceMotion ? 0.12 : 0.24),
+                                    completion: .dismiss
+                                )
+                            }
                         } else {
-                            beginLegacyAnimation(
-                                target: targetOffset,
-                                animation: .easeIn(duration: reduceMotion ? 0.12 : 0.24),
-                                completion: .dismiss
-                            )
+                            let targetOffset = max(verticalOffset, newSize.height + 32)
+                            if #available(iOS 17.0, *) {
+                                verticalOffset = targetOffset
+                            } else {
+                                beginLegacyAnimation(
+                                    target: targetOffset,
+                                    axis: activeDismissAxis,
+                                    animation: .easeIn(duration: reduceMotion ? 0.12 : 0.24),
+                                    completion: .dismiss
+                                )
+                            }
                         }
                     } else {
                         cancelInterruptedGesture()
@@ -275,7 +291,9 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                     // phase enters tracking. If the system cancels it without
                     // `onEnded`, clear that rejection as well.
                     rejectedCurrentGesture = false
+                    horizontalOffset = 0
                     verticalOffset = 0
+                    activeDismissAxis = nil
                 }
             }
         }
@@ -295,7 +313,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         .onChanged { value in
             handleDragChanged(
                 translation: value.translation,
-                containerHeight: containerSize.height
+                containerSize: containerSize
             )
         }
         .onEnded { value in
@@ -309,7 +327,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
 
     private func handleDragChanged(
         translation: CGSize,
-        containerHeight: CGFloat
+        containerSize: CGSize
     ) {
         guard isEnabled,
               phase != .dismissing,
@@ -336,16 +354,19 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase == .tracking else { return }
         switch activeDismissAxis {
         case .rightSwipe:
-            verticalOffset = SubpostRightSwipeDismissPolicy.verticalOffset(
+            horizontalOffset = SubpostRightSwipeDismissPolicy.horizontalOffset(
                 translationX: translation.width,
-                containerHeight: containerHeight
+                containerWidth: containerSize.width
             )
+            verticalOffset = 0
         case .pullDown:
             verticalOffset = SubpostPullDownDismissPolicy.verticalOffset(
                 translationY: translation.height,
-                containerHeight: containerHeight
+                containerHeight: containerSize.height
             )
+            horizontalOffset = 0
         case nil:
+            horizontalOffset = 0
             verticalOffset = 0
         }
     }
@@ -357,11 +378,12 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
     ) {
         defer {
             rejectedCurrentGesture = false
-            activeDismissAxis = nil
         }
         guard phase == .tracking else {
             if phase == .idle {
+                horizontalOffset = 0
                 verticalOffset = 0
+                activeDismissAxis = nil
             }
             return
         }
@@ -384,7 +406,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
             shouldDismiss = false
         }
         if shouldDismiss {
-            finishDismissal(containerHeight: containerSize.height)
+            finishDismissal(containerSize: containerSize)
         } else {
             restore()
         }
@@ -432,6 +454,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                 translationY: event.translation.height,
                 containerHeight: containerSize.height
             )
+            horizontalOffset = 0
         case .ended:
             defer { resetLegacyPullDownGesture() }
             guard phase == .tracking, activeDismissAxis == .pullDown else { return }
@@ -440,7 +463,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                 predictedTranslationY: event.translation.height,
                 containerHeight: containerSize.height
             ) {
-                finishDismissal(containerHeight: containerSize.height)
+                finishDismissal(containerSize: containerSize)
             } else {
                 restore()
             }
@@ -464,19 +487,27 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         legacyPullDownRejected = false
     }
 
-    private func finishDismissal(containerHeight: CGFloat) {
+    private func finishDismissal(containerSize: CGSize) {
         guard phase != .dismissing else { return }
         phase = .dismissing
 
         let duration = reduceMotion ? 0.12 : 0.24
-        let targetOffset = max(containerHeight + 32, 1)
+        let isRightSwipe = activeDismissAxis == .rightSwipe
+        let targetOffset = isRightSwipe
+            ? max(containerSize.width + 32, 1)
+            : max(containerSize.height + 32, 1)
+
         if #available(iOS 17.0, *) {
             cancelLegacyAnimationCompletion()
             withAnimation(
                 .easeIn(duration: duration),
                 completionCriteria: .logicallyComplete
             ) {
-                verticalOffset = targetOffset
+                if isRightSwipe {
+                    horizontalOffset = targetOffset
+                } else {
+                    verticalOffset = targetOffset
+                }
             } completion: {
                 guard phase == .dismissing else { return }
                 onDismiss()
@@ -484,6 +515,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         } else {
             beginLegacyAnimation(
                 target: targetOffset,
+                axis: activeDismissAxis,
                 animation: .easeIn(duration: duration),
                 completion: .dismiss
             )
@@ -496,21 +528,26 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         rejectedCurrentGesture = false
 
         let duration = reduceMotion ? 0.10 : 0.22
+        let restoringAxis = activeDismissAxis
         if #available(iOS 17.0, *) {
             cancelLegacyAnimationCompletion()
             withAnimation(
                 .spring(duration: duration, bounce: reduceMotion ? 0 : 0.08),
                 completionCriteria: .logicallyComplete
             ) {
+                horizontalOffset = 0
                 verticalOffset = 0
             } completion: {
                 guard phase == .restoring else { return }
+                horizontalOffset = 0
+                verticalOffset = 0
                 activeDismissAxis = nil
                 phase = .idle
             }
         } else {
             beginLegacyAnimation(
                 target: 0,
+                axis: restoringAxis,
                 animation: .spring(duration: duration, bounce: reduceMotion ? 0 : 0.08),
                 completion: .restore
             )
@@ -519,6 +556,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
 
     private func beginLegacyAnimation(
         target: CGFloat,
+        axis: SubpostSheetDismissAxis?,
         animation: Animation,
         completion: SubpostLegacyAnimationCompletion
     ) {
@@ -526,7 +564,11 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         legacyAnimationTarget = target
         legacyAnimationCompletion = completion
         withAnimation(animation) {
-            verticalOffset = target
+            if axis == .rightSwipe {
+                horizontalOffset = target
+            } else {
+                verticalOffset = target
+            }
         }
     }
 
@@ -540,6 +582,8 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
             onDismiss()
         case .restore:
             guard phase == .restoring else { return }
+            horizontalOffset = 0
+            verticalOffset = 0
             activeDismissAxis = nil
             phase = .idle
         }
@@ -560,6 +604,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase != .dismissing else { return }
         cancelLegacyAnimationCompletion()
         phase = .idle
+        horizontalOffset = 0
         verticalOffset = 0
         rejectedCurrentGesture = false
         activeDismissAxis = nil
@@ -682,6 +727,11 @@ enum SubpostRightSwipeDismissPolicy {
     static func shouldBegin(translation: CGSize) -> Bool {
         translation.width > 0
             && translation.width > abs(translation.height) * horizontalDominance
+    }
+
+    static func horizontalOffset(translationX: CGFloat, containerWidth: CGFloat) -> CGFloat {
+        guard containerWidth > 0 else { return 0 }
+        return min(max(translationX, 0), containerWidth * maximumInteractiveOffsetFraction)
     }
 
     static func verticalOffset(translationX: CGFloat, containerHeight: CGFloat) -> CGFloat {
