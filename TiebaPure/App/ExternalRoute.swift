@@ -82,7 +82,7 @@ enum ExternalRoute: Equatable, Identifiable {
               components.user == nil,
               components.password == nil,
               let host = components.host?.lowercased(),
-              host == "tieba.baidu.com" || host.hasSuffix(".tieba.baidu.com") else {
+              host == "tieba.baidu.com" || host.hasSuffix(".tieba.baidu.com") || host == "tiebac.baidu.com" else {
             return nil
         }
         let pathParts = components.path.split(separator: "/").map(String.init)

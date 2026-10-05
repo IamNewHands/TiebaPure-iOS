@@ -10,7 +10,8 @@ enum PostMapper {
         usersByID: [Int64: Tieba_User]
     ) -> [ContentBlock] {
         let mapped = blocks(from: contents)
-        return ReplyTargetResolver.resolve(in: mapped, usersByID: usersByID)
+        let resolved = ReplyTargetResolver.resolve(in: mapped, usersByID: usersByID)
+        return TiebaLinkExtractor.extractLinks(from: resolved)
     }
 
     static func blocks(from content: Tieba_PbContent) -> [ContentBlock] {
@@ -18,7 +19,8 @@ enum PostMapper {
 
         switch content.type {
         case 0, 9, 27:
-            return TiebaEmoticon.blocks(from: content.text)
+            let emoticonBlocks = TiebaEmoticon.blocks(from: content.text)
+            return TiebaLinkExtractor.extractLinks(from: emoticonBlocks)
         case 1:
             return [.link(title: TiebaEmoticon.plainDisplayText(content.text), url: url(firstNonEmpty(content.link)))]
         case 2:

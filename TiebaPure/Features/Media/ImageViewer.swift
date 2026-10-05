@@ -9,6 +9,8 @@ struct ImageViewer: View {
     let image: ImageContent
     let galleryImages: [ImageContent]
     let galleryIndex: Int
+    let maxDisplayWidth: CGFloat?
+    let maxDisplayHeight: CGFloat?
 
     @State private var inlineLoadState: TiebaRemoteImageLoadState = .empty
     @State private var inlineRetryTrigger = 0
@@ -20,11 +22,15 @@ struct ImageViewer: View {
     init(
         image: ImageContent,
         galleryImages: [ImageContent]? = nil,
-        galleryIndex: Int = 0
+        galleryIndex: Int = 0,
+        maxDisplayWidth: CGFloat? = nil,
+        maxDisplayHeight: CGFloat? = nil
     ) {
         self.image = image
         self.galleryImages = galleryImages ?? [image]
         self.galleryIndex = galleryIndex
+        self.maxDisplayWidth = maxDisplayWidth
+        self.maxDisplayHeight = maxDisplayHeight
         let identity = Self.sourceIdentity(for: image)
         previewSourceIdentity = identity
         _previewSource = StateObject(
@@ -106,7 +112,7 @@ struct ImageViewer: View {
     private var inlineImage: some View {
         Color.clear
         .aspectRatio(inlineAspectRatio, contentMode: .fit)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: maxDisplayWidth ?? .infinity, alignment: .leading)
         .overlay {
             GeometryReader { proxy in
                 ZStack {
@@ -181,7 +187,7 @@ struct ImageViewer: View {
             }
             }
         }
-        .frame(maxHeight: InlineImageLayoutPolicy.maximumInlineHeight)
+        .frame(maxHeight: maxDisplayHeight ?? InlineImageLayoutPolicy.maximumInlineHeight)
         .clipShape(RoundedRectangle(cornerRadius: TiebaPureTheme.Radius.media, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: TiebaPureTheme.Radius.media, style: .continuous))
         .clipped()
@@ -190,8 +196,8 @@ struct ImageViewer: View {
     private var imagePlaceholder: some View {
         Color.clear
         .aspectRatio(inlineAspectRatio, contentMode: .fit)
-        .frame(maxHeight: InlineImageLayoutPolicy.maximumInlineHeight)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxHeight: maxDisplayHeight ?? InlineImageLayoutPolicy.maximumInlineHeight)
+        .frame(maxWidth: maxDisplayWidth ?? .infinity, alignment: .leading)
         .overlay {
             ZStack {
                 RoundedRectangle(cornerRadius: TiebaPureTheme.Radius.media, style: .continuous)

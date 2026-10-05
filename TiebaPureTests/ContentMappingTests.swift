@@ -847,4 +847,46 @@ final class ContentMappingTests: XCTestCase {
 
         XCTAssertEqual(mapped.author.displayNameResolved, "用户8")
     }
+
+    func testSubpostMappingPreservesImageBlocks() {
+        var textContent = Tieba_PbContent()
+        textContent.type = 0
+        textContent.text = "我有女朋友的，这是她送我是，嘻嘻"
+
+        var imageContent = Tieba_PbContent()
+        imageContent.type = 3
+        imageContent.cdnSrc = "https://image.example/gift.jpg"
+        imageContent.originSrc = "https://image.example/gift.jpg"
+        imageContent.width = 560
+        imageContent.height = 746
+
+        var subpost = Tieba_SubPostList()
+        subpost.id = 153987271177
+        subpost.content = [textContent, imageContent]
+
+        let mapped = PostMapper.subpost(subpost)
+
+        XCTAssertEqual(mapped.blocks.count, 2)
+        XCTAssertEqual(mapped.blocks[0], .text("我有女朋友的，这是她送我是，嘻嘻"))
+        guard case let .image(image) = mapped.blocks[1] else {
+            XCTFail("Expected image block in subpost")
+            return
+        }
+        XCTAssertEqual(image.thumbnailURL?.absoluteString, "https://image.example/gift.jpg")
+        XCTAssertEqual(image.width, 560)
+        XCTAssertEqual(image.height, 746)
+    }
+
+    func testPostMapperExtractsLinksFromTextBlocks() {
+        var content = Tieba_PbContent()
+        content.type = 0
+        content.text = "推荐帖子 https://tieba.baidu.com/p/11064752475 看看"
+
+        let blocks = PostMapper.blocks(from: [content])
+
+        XCTAssertEqual(blocks.count, 3)
+        XCTAssertEqual(blocks[0], .text("推荐帖子 "))
+        XCTAssertEqual(blocks[1], .link(title: "https://tieba.baidu.com/p/11064752475", url: URL(string: "https://tieba.baidu.com/p/11064752475")))
+        XCTAssertEqual(blocks[2], .text(" 看看"))
+    }
 }

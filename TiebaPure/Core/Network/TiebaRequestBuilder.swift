@@ -5,6 +5,7 @@ import UIKit
 enum TiebaClientVersion: String {
     case v12 = "12.52.1.0"
     case v22 = "22.5.1.0"
+    case v22_12 = "22.12.1.0"
     case mini = "7.2.0.0"
 }
 
@@ -47,12 +48,15 @@ struct TiebaRequestBuilder {
         )
     }
 
-    func common(account: Account?) -> Tieba_CommonRequest {
+    func common(
+        account: Account?,
+        clientVersion: String = TiebaClientVersion.v12.rawValue
+    ) -> Tieba_CommonRequest {
         var request = Tieba_CommonRequest()
         request.bduss = account?.bduss ?? ""
         request.clientID = clientID
         request.clientType = 2
-        request.clientVersion = TiebaClientVersion.v12.rawValue
+        request.clientVersion = clientVersion
         request.osVersion = UIDevice.current.systemVersion
         request.timestamp = Int64(Date().timeIntervalSince1970 * 1000)
         request.brand = "Apple"
@@ -70,7 +74,7 @@ struct TiebaRequestBuilder {
         request.scrW = Int32(screenWidth)
         request.scrH = Int32(screenHeight)
         request.stoken = account?.stoken ?? ""
-        request.userAgent = "tieba/\(TiebaClientVersion.v12.rawValue)"
+        request.userAgent = "tieba/\(clientVersion)"
         return request
     }
 

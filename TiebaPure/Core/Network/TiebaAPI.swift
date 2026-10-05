@@ -549,7 +549,7 @@ extension TiebaAPI {
     ) async throws -> ThreadPage {
         let requestPage = try TiebaRequestValuePolicy.signedPage(page)
         var requestData = Tieba_PbPage_PbPageRequestData()
-        requestData.common = requestBuilder.common(account: account)
+        requestData.common = requestBuilder.common(account: account, clientVersion: TiebaClientVersion.v22_12.rawValue)
         requestData.kz = threadID
         requestData.pn = requestPage
         requestData.r = Int32(sortType.rawValue)
@@ -601,7 +601,7 @@ extension TiebaAPI {
         let requestPostID = try TiebaRequestValuePolicy.signedIdentifier(postID)
         let requestSubpostID = try TiebaRequestValuePolicy.signedIdentifier(subpostID)
         var requestData = Tieba_PbFloor_PbFloorRequestData()
-        requestData.common = requestBuilder.common(account: account)
+        requestData.common = requestBuilder.common(account: account, clientVersion: TiebaClientVersion.v22_12.rawValue)
         requestData.forumID = forumID
         requestData.kz = threadID
         requestData.pid = requestPostID

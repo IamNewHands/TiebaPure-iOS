@@ -132,6 +132,7 @@ enum InlinePlainTextPolicy {
         var result = ""
         for block in blocks {
             guard case let .text(text) = block else { return nil }
+            guard TiebaLinkExtractor.containsLinks(in: text) == false else { return nil }
             result.append(text)
         }
         return result
@@ -142,7 +143,9 @@ enum InlineNativeTextPolicy {
     static func supports(_ blocks: [ContentBlock]) -> Bool {
         blocks.isEmpty == false && blocks.allSatisfy { block in
             switch block {
-            case .text, .emoticon:
+            case let .text(text):
+                return TiebaLinkExtractor.containsLinks(in: text) == false
+            case .emoticon:
                 return true
             case .link, .mention, .image, .video, .voice:
                 return false
@@ -1434,7 +1437,8 @@ struct InlineContentText: UIViewRepresentable {
             }
         }
 
-        for block in blocks {
+        let expandedBlocks = TiebaLinkExtractor.extractLinks(from: blocks)
+        for block in expandedBlocks {
             switch block {
             case let .text(text):
                 appendHighlightedText(
@@ -1498,7 +1502,8 @@ struct InlineContentText: UIViewRepresentable {
                 result.append(Self.threadAuthorBadgeTitle)
             }
         }
-        for block in blocks {
+        let expandedBlocks = TiebaLinkExtractor.extractLinks(from: blocks)
+        for block in expandedBlocks {
             switch block {
             case let .text(text):
                 result.append(text)

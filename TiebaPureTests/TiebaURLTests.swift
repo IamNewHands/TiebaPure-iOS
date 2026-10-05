@@ -300,4 +300,66 @@ final class TiebaURLTests: XCTestCase {
         XCTAssertNil(malformedResult[SafariActionPayload.deepLinkKey])
         XCTAssertNotNil(malformedResult[SafariActionPayload.errorMessageKey])
     }
+
+    func testTiebaLinkExtractorDetectsAndNormalizesURLs() throws {
+        let text = "欢迎访问 www.baidu.com 或者 https://github.com/example"
+        let blocks = TiebaLinkExtractor.extractLinks(from: text)
+
+        XCTAssertEqual(blocks.count, 4)
+        XCTAssertEqual(blocks[0], .text("欢迎访问 "))
+        XCTAssertEqual(blocks[1], .link(title: "www.baidu.com", url: URL(string: "https://www.baidu.com")))
+        XCTAssertEqual(blocks[2], .text(" 或者 "))
+        XCTAssertEqual(blocks[3], .link(title: "https://github.com/example", url: URL(string: "https://github.com/example")))
+    }
+
+    func testTiebaLinkExtractorTrimsTrailingPunctuation() throws {
+        let text = "看这个：https://tieba.baidu.com/p/11064752475。特别好笑"
+        let blocks = TiebaLinkExtractor.extractLinks(from: text)
+
+        XCTAssertEqual(blocks.count, 3)
+        XCTAssertEqual(blocks[0], .text("看这个："))
+        XCTAssertEqual(blocks[1], .link(title: "https://tieba.baidu.com/p/11064752475", url: URL(string: "https://tieba.baidu.com/p/11064752475")))
+        XCTAssertEqual(blocks[2], .text("。特别好笑"))
+    }
+
+    func testTiebaLinkExtractorHandlesParenthesesAndBrackets() throws {
+        let text = "(https://tieba.baidu.com/p/123) 【tieba.baidu.com/p/456】"
+        let blocks = TiebaLinkExtractor.extractLinks(from: text)
+
+        XCTAssertEqual(blocks.count, 5)
+        XCTAssertEqual(blocks[0], .text("("))
+        XCTAssertEqual(blocks[1], .link(title: "https://tieba.baidu.com/p/123", url: URL(string: "https://tieba.baidu.com/p/123")))
+        XCTAssertEqual(blocks[2], .text(") 【"))
+        XCTAssertEqual(blocks[3], .link(title: "tieba.baidu.com/p/456", url: URL(string: "https://tieba.baidu.com/p/456")))
+        XCTAssertEqual(blocks[4], .text("】"))
+    }
+
+    func testTiebaLinkExtractorResolvesInAppRoutesForTiebaURLs() throws {
+        let threadURLText = "https://tieba.baidu.com/p/11064752475?pid=154000658714&lz=0"
+        let blocks = TiebaLinkExtractor.extractLinks(from: threadURLText)
+        guard case let .link(_, url)? = blocks.first, let url else {
+            XCTFail("Expected link block")
+            return
+        }
+        let route = ExternalRoute.parse(url)
+        XCTAssertEqual(route, .thread(id: 11064752475, postID: 154000658714))
+
+        let mobileThreadURLText = "tiebac.baidu.com/p/11064752475"
+        let mobileBlocks = TiebaLinkExtractor.extractLinks(from: mobileThreadURLText)
+        guard case let .link(_, mobileURL)? = mobileBlocks.first, let mobileURL else {
+            XCTFail("Expected mobile link block")
+            return
+        }
+        let mobileRoute = ExternalRoute.parse(mobileURL)
+        XCTAssertEqual(mobileRoute, .thread(id: 11064752475, postID: nil))
+
+        let externalText = "https://example.com/other"
+        let externalBlocks = TiebaLinkExtractor.extractLinks(from: externalText)
+        guard case let .link(_, externalURL)? = externalBlocks.first, let externalURL else {
+            XCTFail("Expected external link block")
+            return
+        }
+        XCTAssertNil(ExternalRoute.parse(externalURL))
+        XCTAssertNotNil(TiebaURL.webpage(externalURL.absoluteString))
+    }
 }

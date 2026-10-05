@@ -224,3 +224,105 @@ enum TiebaRemoteMediaPolicy {
         }
     }
 }
+
+enum TiebaLinkExtractor {
+    private static let trailingPunctuation = CharacterSet(
+        charactersIn: ".,;:!?)]}>\"'\u{3002}\u{ff0c}\u{ff01}\u{ff1f}\u{ff1b}\u{ff1a}\u{ff09}\u{3011}\u{300b}\u{201d}\u{2019}"
+    )
+
+    private static let urlExpression: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(https?://[^\s\u4e00-\u9fa5\r\n]+|www\.[^\s\u4e00-\u9fa5\r\n]+|(?:(?:tieba|tiebac)\.baidu\.com|tb\.cn)/[^\s\u4e00-\u9fa5\r\n]+)"#,
+            options: [.caseInsensitive]
+        )
+    }()
+
+    static func containsLinks(in text: String) -> Bool {
+        guard text.isEmpty == false, let expression = urlExpression else { return false }
+        let nsText = text as NSString
+        return expression.firstMatch(in: text, options: [], range: NSRange(location: 0, length: nsText.length)) != nil
+    }
+
+    static func extractLinks(from text: String) -> [ContentBlock] {
+        guard text.isEmpty == false, let expression = urlExpression else {
+            return text.isEmpty ? [] : [.text(text)]
+        }
+
+        let nsText = text as NSString
+        let matches = expression.matches(
+            in: text,
+            options: [],
+            range: NSRange(location: 0, length: nsText.length)
+        )
+        guard matches.isEmpty == false else {
+            return [.text(text)]
+        }
+
+        var blocks: [ContentBlock] = []
+        var cursor = 0
+
+        for match in matches {
+            let start = match.range.location
+            guard start >= cursor else { continue }
+
+            let raw = nsText.substring(with: match.range)
+            var trimmed = raw
+            while let last = trimmed.unicodeScalars.last, trailingPunctuation.contains(last) {
+                trimmed.removeLast()
+            }
+            guard trimmed.isEmpty == false else { continue }
+
+            let trimmedLength = (trimmed as NSString).length
+            let linkEnd = start + trimmedLength
+
+            var normalized = trimmed
+            let lower = normalized.lowercased()
+            if !lower.hasPrefix("http://") && !lower.hasPrefix("https://") {
+                normalized = "https://" + normalized
+            }
+            let normalizedLower = normalized.lowercased()
+            if normalizedLower.hasPrefix("http://tieba.baidu.com") || normalizedLower.hasPrefix("http://tiebac.baidu.com") {
+                normalized = "https://" + normalized.dropFirst("http://".count)
+            }
+            if normalized.lowercased().hasPrefix("https://tiebac.baidu.com") {
+                normalized = "https://tieba.baidu.com" + normalized.dropFirst("https://tiebac.baidu.com".count)
+            }
+
+            guard let parsedURL = URL(string: normalized),
+                  TiebaURL.webpage(parsedURL.absoluteString) != nil else {
+                continue
+            }
+
+            if start > cursor {
+                let prefixText = nsText.substring(with: NSRange(location: cursor, length: start - cursor))
+                if prefixText.isEmpty == false {
+                    blocks.append(.text(prefixText))
+                }
+            }
+
+            blocks.append(.link(title: trimmed, url: parsedURL))
+            cursor = linkEnd
+        }
+
+        if cursor < nsText.length {
+            let suffixText = nsText.substring(from: cursor)
+            if suffixText.isEmpty == false {
+                blocks.append(.text(suffixText))
+            }
+        }
+
+        return blocks.isEmpty ? [.text(text)] : blocks
+    }
+
+    static func extractLinks(from blocks: [ContentBlock]) -> [ContentBlock] {
+        blocks.flatMap { block -> [ContentBlock] in
+            switch block {
+            case let .text(text):
+                return extractLinks(from: text)
+            default:
+                return [block]
+            }
+        }
+    }
+}
+
