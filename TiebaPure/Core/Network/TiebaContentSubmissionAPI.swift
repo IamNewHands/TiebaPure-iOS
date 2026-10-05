@@ -919,18 +919,7 @@ extension TiebaAPI {
         }
         let response: LoginResponseDTO
         do {
-            response = try await client.postForm(
-                .postingLogin,
-                fields: [
-                    "_client_version": TiebaContentSubmissionRequestFactory.postingLoginClientVersion,
-                    "bdusstoken": account.bduss
-                ],
-                headers: [
-                    "User-Agent": "tieba/\(TiebaContentSubmissionRequestFactory.postingLoginClientVersion) skin/default"
-                ],
-                signingSecret: "tiebaclient!!!",
-                as: LoginResponseDTO.self
-            )
+            response = try await writeTokenLogin(bduss: account.bduss)
         } catch is CancellationError {
             throw CancellationError()
         } catch where Task.isCancelled {

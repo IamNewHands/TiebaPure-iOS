@@ -565,6 +565,9 @@ extension TiebaAPI {
         try await refreshedClientTBS(for: account, allowsStoredFallback: false)
     }
 
+    /// The write token every mutation signs with, resolved from the cheapest
+    /// source that can answer: the handshake on the protobuf host, then the web
+    /// profile, then the token the account already carries.
     private func refreshedClientTBS(
         for account: Account,
         allowsStoredFallback: Bool
@@ -574,11 +577,10 @@ extension TiebaAPI {
         let clientAttemptStarted = Date()
 
         do {
-            let response = try await login(
-                bduss: account.bduss,
-                stoken: account.stoken,
-                baiduID: account.baiduID ?? ""
-            )
+            // The app host's login is the client's sync channel and holds the
+            // request for its poll window; the token is minted on the protobuf
+            // host instead. See `TiebaAPI.writeTokenLogin(bduss:)`.
+            let response = try await writeTokenLogin(bduss: account.bduss)
             await logSlowTokenHop("客户端登录", startedAt: clientAttemptStarted)
             try Task.checkCancellation()
             let code = Int(response.errorCode ?? "0") ?? 0

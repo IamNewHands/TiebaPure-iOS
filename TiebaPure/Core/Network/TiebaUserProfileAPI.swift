@@ -439,10 +439,11 @@ extension TiebaAPI {
     /// deleting the thread's first post here would remove the whole thread, so a
     /// reply whose own ID is missing is refused before the request is built.
     ///
-    /// A delete is the slowest write the app makes — the write token hop alone
-    /// has been measured at twenty seconds — and the service keeps returning the
-    /// reply in its own list for a while afterwards, so where the time went and
-    /// whether the service accepted it are both recorded.
+    /// The write token hop used to cost twenty seconds on its own, so the two
+    /// hops are still timed apart rather than as one total: the service also
+    /// keeps returning the reply in its own list for a while afterwards, and
+    /// where the time went and whether the service accepted it are both worth
+    /// recording.
     func deleteOwnReply(account: Account, reply: OwnReply) async throws {
         try Task.checkCancellation()
         try UserProfileRequestFactory.validateReplyDeletionTarget(reply)

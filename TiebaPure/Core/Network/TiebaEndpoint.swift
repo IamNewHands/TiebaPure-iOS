@@ -7,6 +7,9 @@ enum TiebaEndpoint {
     static let socialBase = URL(string: "https://tiebac.baidu.com")!
 
     case login
+    /// The write-token route: the same path as `login`, but on the protobuf
+    /// host and without the sync channel fields. That pairing is what makes it
+    /// answer immediately, and minting a write token is now its only use.
     case postingLogin
     case initNickname
     case webMyInfo

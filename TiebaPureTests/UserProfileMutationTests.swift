@@ -695,6 +695,17 @@ final class UserProfileMutationTests: XCTestCase {
             ["/c/s/login", "/c/c/bawu/delpost"],
             "先取一次 tbs，然后只发一次删除请求"
         )
+        let tokenRequest = try XCTUnwrap(records.first)
+        XCTAssertEqual(
+            tokenRequest.host,
+            "tiebac.baidu.com",
+            "写令牌必须走 protobuf 主机：应用主机的 /c/s/login 是同步长连接，实测每次都要等满 20.1 秒"
+        )
+        XCTAssertEqual(
+            try Self.formFields(tokenRequest.body)["bdusstoken"],
+            "fixture-bduss",
+            "写令牌只带凭据，不带会触发长连接的同步频道字段"
+        )
         let request = try XCTUnwrap(records.last)
         let fields = try Self.formFields(request.body)
         XCTAssertEqual(fields["pid"], "2001", "要删的是这条回复自己的 post id")

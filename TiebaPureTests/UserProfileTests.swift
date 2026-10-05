@@ -628,12 +628,18 @@ final class UserProfileTests: XCTestCase {
             let path = try XCTUnwrap(request.url?.path)
             switch path {
             case "/c/s/login":
-                XCTAssertEqual(request.url?.host, "c.tieba.baidu.com")
+                // The write token is minted on the protobuf host: the app host's
+                // route carries the sync channel and parks the request for the
+                // length of its poll window, which measured 20.1s on device.
+                XCTAssertEqual(request.url?.host, "tiebac.baidu.com")
                 let fields = try Self.formFields(request)
-                XCTAssertEqual(fields["bdusstoken"], "bduss|")
-                XCTAssertEqual(fields["_client_id"], "profile-test-client")
-                XCTAssertEqual(fields["from"], "tieba")
+                XCTAssertEqual(fields["_client_version"], "22.5.1.0")
+                XCTAssertEqual(fields["bdusstoken"], "bduss")
                 XCTAssertNotNil(fields["sign"])
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "User-Agent"),
+                    "tieba/22.5.1.0 skin/default"
+                )
                 return Data(#"{"error_code":"0","anti":{"tbs":"fresh-tbs"}}"#.utf8)
             case "/c/c/user/follow":
                 mutationCount += 1
@@ -711,7 +717,7 @@ final class UserProfileTests: XCTestCase {
             let path = try XCTUnwrap(request.url?.path)
             switch path {
             case "/c/s/login":
-                XCTAssertEqual(request.url?.host, "c.tieba.baidu.com")
+                XCTAssertEqual(request.url?.host, "tiebac.baidu.com")
                 return Data(#"{"error_code":"110001","error_msg":"登录已失效"}"#.utf8)
             case "/mo/q/newmoindex":
                 XCTAssertEqual(request.url?.host, "tieba.baidu.com")

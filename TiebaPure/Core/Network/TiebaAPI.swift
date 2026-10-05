@@ -48,6 +48,36 @@ struct TiebaAPI {
         return account
     }
 
+    /// The write-token handshake, and the only place that mints one.
+    ///
+    /// `/c/s/login` on the app host is the client's sync channel: it carries
+    /// `channel_id` / `authsid` and parks the request for the poll window
+    /// before it answers. On device it returned at a steady 20.1s for six
+    /// calls in a row, while the delete it preceded answered in 0.3s — the
+    /// token, not the write, was the entire wait.
+    ///
+    /// The same path on the protobuf host, asked with only the credential, is
+    /// the route the posting layer has always used to mint a token, so every
+    /// write token now comes from here. Callers keep their own error mapping:
+    /// this throws what the transport throws and never inspects `error_code`.
+    func writeTokenLogin(bduss: String) async throws -> LoginResponseDTO {
+        return try await client.postForm(
+            .postingLogin,
+            fields: [
+                "_client_version": TiebaContentSubmissionRequestFactory.postingLoginClientVersion,
+                "bdusstoken": bduss
+            ],
+            headers: [
+                "User-Agent": "tieba/\(TiebaContentSubmissionRequestFactory.postingLoginClientVersion) skin/default"
+            ],
+            signingSecret: "tiebaclient!!!",
+            as: LoginResponseDTO.self
+        )
+    }
+
+    /// The full app login: account, nickname and the sync channel's token. Used
+    /// to establish a session, not to mint a write token — see
+    /// `writeTokenLogin(bduss:)` for why the write path must not use it.
     func login(bduss: String, stoken: String, baiduID: String = "") async throws -> LoginResponseDTO {
         let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
         var fields = requestBuilder.officialCommonFields(

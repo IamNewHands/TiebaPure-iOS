@@ -531,11 +531,13 @@ struct MyRepliesView: View {
                             }
                         }
                     } footer: {
-                        // A delete waits on a write token that has been measured at
-                        // twenty seconds, so the wait is named instead of looking
-                        // like a tap that did nothing.
+                        // A delete used to sit on a write token that measured
+                        // twenty seconds before the row even reached the
+                        // service, so the wait was named. The token now comes
+                        // from the fast route and the copy only says what is
+                        // happening.
                         if deletingReplyID != nil {
-                            Text("正在删除这条回复。贴吧要先换一次写入令牌，网络慢时可能要等半分钟，请不要离开这个页面。")
+                            Text("正在删除这条回复，请不要离开这个页面。")
                         } else {
                             Text("点右侧垃圾桶或左滑一条回复可以删除它。删除只影响这一条回复，不会动主题帖。")
                         }
