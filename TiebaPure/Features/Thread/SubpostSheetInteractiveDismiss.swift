@@ -354,10 +354,9 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase == .tracking else { return }
         switch activeDismissAxis {
         case .rightSwipe:
-            horizontalOffset = SubpostRightSwipeDismissPolicy.horizontalOffset(
-                translationX: translation.width,
-                containerWidth: containerSize.width
-            )
+            // 用户要求：右滑退出时页面保持固定，不跟随手指拖动移位，避免生硬感；
+            // 待手势松开判定退出后直接以流畅动画向右滑出。
+            horizontalOffset = 0
             verticalOffset = 0
         case .pullDown:
             verticalOffset = SubpostPullDownDismissPolicy.verticalOffset(
@@ -491,16 +490,18 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase != .dismissing else { return }
         phase = .dismissing
 
-        let duration = reduceMotion ? 0.12 : 0.24
         let isRightSwipe = activeDismissAxis == .rightSwipe
         let targetOffset = isRightSwipe
             ? max(containerSize.width + 32, 1)
             : max(containerSize.height + 32, 1)
+        let animation: Animation = isRightSwipe
+            ? .easeInOut(duration: reduceMotion ? 0.12 : 0.24)
+            : .easeIn(duration: reduceMotion ? 0.12 : 0.24)
 
         if #available(iOS 17.0, *) {
             cancelLegacyAnimationCompletion()
             withAnimation(
-                .easeIn(duration: duration),
+                animation,
                 completionCriteria: .logicallyComplete
             ) {
                 if isRightSwipe {
@@ -516,7 +517,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
             beginLegacyAnimation(
                 target: targetOffset,
                 axis: activeDismissAxis,
-                animation: .easeIn(duration: duration),
+                animation: animation,
                 completion: .dismiss
             )
         }
@@ -718,9 +719,9 @@ private struct SubpostSheetTransparentHostInstaller: UIViewControllerRepresentab
 enum SubpostRightSwipeDismissPolicy {
     static let minimumTrackingDistance: CGFloat = 8
     static let horizontalDominance: CGFloat = 1.2
-    static let completionProgress: CGFloat = 0.28
-    static let completionDistance: CGFloat = 110
-    static let predictedCompletionDistance: CGFloat = 220
+    static let completionProgress: CGFloat = 0.22
+    static let completionDistance: CGFloat = 80
+    static let predictedCompletionDistance: CGFloat = 180
     static let predictionDuration: CGFloat = 0.18
     static let maximumInteractiveOffsetFraction: CGFloat = 0.72
 
