@@ -25,34 +25,9 @@ struct SubpostSheetScrollTopPreferenceKey: PreferenceKey {
     }
 }
 
-private enum SubpostLegacyAnimationCompletion {
+private enum SubpostAnimationCompletion {
     case dismiss
     case restore
-}
-
-private struct SubpostLegacyAnimationCompletionObserver: AnimatableModifier {
-    var observedValue: CGFloat
-    let targetValue: CGFloat?
-    let generation: UInt
-    let completion: (UInt) -> Void
-
-    var animatableData: CGFloat {
-        get { observedValue }
-        set {
-            observedValue = newValue
-            guard let targetValue,
-                  abs(newValue - targetValue) <= 0.5 else { return }
-            let completion = completion
-            let generation = generation
-            DispatchQueue.main.async {
-                completion(generation)
-            }
-        }
-    }
-
-    func body(content: Content) -> some View {
-        content
-    }
 }
 
 struct SubpostSheetDismissAction {
@@ -180,9 +155,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
     @State private var contentTopBaseline: CGFloat?
     @State private var legacyPullDownStartedAtTop = false
     @State private var legacyPullDownRejected = false
-    @State private var legacyAnimationGeneration: UInt = 0
-    @State private var legacyAnimationTarget: CGFloat?
-    @State private var legacyAnimationCompletion: SubpostLegacyAnimationCompletion?
+    @State private var animationGeneration: UInt = 0
     @GestureState private var dismissGestureIsActive = false
 
     init(
@@ -214,14 +187,6 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                 .accessibilityIdentifier("subpost-sheet-surface")
                 .contentShape(Rectangle())
                 .offset(x: horizontalOffset, y: verticalOffset)
-                .modifier(
-                    SubpostLegacyAnimationCompletionObserver(
-                        observedValue: activeDismissAxis == .rightSwipe ? horizontalOffset : verticalOffset,
-                        targetValue: legacyAnimationTarget,
-                        generation: legacyAnimationGeneration,
-                        completion: completeLegacyAnimation
-                    )
-                )
                 .environment(
                     \.subpostSheetDismissAction,
                     SubpostSheetDismissAction {
@@ -259,30 +224,25 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
                     if phase == .dismissing {
                         // Rotation during the short completion animation must
                         // never make an already-hidden surface visible again.
+                        let rotationDuration: TimeInterval = reduceMotion ? 0.12 : 0.2
                         if activeDismissAxis == .rightSwipe {
                             let targetOffset = max(horizontalOffset, newSize.width + 32)
-                            if #available(iOS 17.0, *) {
-                                horizontalOffset = targetOffset
-                            } else {
-                                beginLegacyAnimation(
-                                    target: targetOffset,
-                                    axis: .rightSwipe,
-                                    animation: .easeIn(duration: reduceMotion ? 0.12 : 0.24),
-                                    completion: .dismiss
-                                )
-                            }
+                            animateOffset(
+                                target: targetOffset,
+                                axis: .rightSwipe,
+                                animation: .easeOut(duration: rotationDuration),
+                                duration: rotationDuration,
+                                completion: .dismiss
+                            )
                         } else {
                             let targetOffset = max(verticalOffset, newSize.height + 32)
-                            if #available(iOS 17.0, *) {
-                                verticalOffset = targetOffset
-                            } else {
-                                beginLegacyAnimation(
-                                    target: targetOffset,
-                                    axis: activeDismissAxis,
-                                    animation: .easeIn(duration: reduceMotion ? 0.12 : 0.24),
-                                    completion: .dismiss
-                                )
-                            }
+                            animateOffset(
+                                target: targetOffset,
+                                axis: activeDismissAxis,
+                                animation: .easeOut(duration: rotationDuration),
+                                duration: rotationDuration,
+                                completion: .dismiss
+                            )
                         }
                     } else {
                         cancelInterruptedGesture()
@@ -429,8 +389,13 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         }
 
         let shouldDismiss: Bool
+        var releaseVelocity: CGFloat = 0
         switch activeDismissAxis {
         case .rightSwipe:
+            releaseVelocity = SubpostRightSwipeDismissPolicy.releaseVelocity(
+                translationX: translation.width,
+                predictedTranslationX: predictedTranslation.width
+            )
             shouldDismiss = SubpostRightSwipeDismissPolicy.shouldFinish(
                 translationX: translation.width,
                 predictedTranslationX: predictedTranslation.width,
@@ -446,7 +411,10 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
             shouldDismiss = false
         }
         if shouldDismiss {
-            finishDismissal(containerSize: containerSize)
+            finishDismissal(
+                containerSize: containerSize,
+                releaseVelocity: releaseVelocity
+            )
         } else {
             restore()
         }
@@ -527,40 +495,46 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         legacyPullDownRejected = false
     }
 
-    private func finishDismissal(containerSize: CGSize) {
+    private func finishDismissal(
+        containerSize: CGSize,
+        releaseVelocity: CGFloat = 0
+    ) {
         guard phase != .dismissing else { return }
         phase = .dismissing
 
-        let duration = reduceMotion ? 0.12 : 0.24
         let isRightSwipe = activeDismissAxis == .rightSwipe
         let targetOffset = isRightSwipe
             ? max(containerSize.width + 32, 1)
             : max(containerSize.height + 32, 1)
-        let animation: Animation = .easeIn(duration: duration)
+        let duration = dismissalDuration(
+            isRightSwipe: isRightSwipe,
+            targetOffset: targetOffset,
+            releaseVelocity: releaseVelocity
+        )
 
-        if #available(iOS 17.0, *) {
-            cancelLegacyAnimationCompletion()
-            withAnimation(
-                animation,
-                completionCriteria: .logicallyComplete
-            ) {
-                if isRightSwipe {
-                    horizontalOffset = targetOffset
-                } else {
-                    verticalOffset = targetOffset
-                }
-            } completion: {
-                guard phase == .dismissing else { return }
-                onDismiss()
-            }
-        } else {
-            beginLegacyAnimation(
-                target: targetOffset,
-                axis: activeDismissAxis,
-                animation: animation,
-                completion: .dismiss
-            )
-        }
+        animateOffset(
+            target: targetOffset,
+            axis: activeDismissAxis,
+            animation: .easeOut(duration: duration),
+            duration: duration,
+            completion: .dismiss
+        )
+    }
+
+    /// 松手那一刻手指还在移动，所以滑出的时长由剩余距离和松手速度推出：动画起步
+    /// 就接近手指速度再减速（`easeOut` 起步即最快），不会像 `easeIn` 那样先停住
+    /// 再加速，那段“停住”就是用户看到的卡顿。
+    private func dismissalDuration(
+        isRightSwipe: Bool,
+        targetOffset: CGFloat,
+        releaseVelocity: CGFloat
+    ) -> TimeInterval {
+        guard reduceMotion == false else { return 0.12 }
+        guard isRightSwipe else { return 0.24 }
+        return SubpostRightSwipeDismissPolicy.completionDuration(
+            remainingDistance: max(targetOffset - horizontalOffset, 1),
+            releaseVelocity: releaseVelocity
+        )
     }
 
     private func restore() {
@@ -569,71 +543,65 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         rejectedCurrentGesture = false
 
         let duration = reduceMotion ? 0.10 : 0.22
-        let restoringAxis = activeDismissAxis
-        if #available(iOS 17.0, *) {
-            cancelLegacyAnimationCompletion()
-            withAnimation(
-                .spring(duration: duration, bounce: reduceMotion ? 0 : 0.08),
-                completionCriteria: .logicallyComplete
-            ) {
-                horizontalOffset = 0
+        // 回弹不使用带过冲的弹簧：过冲会越过静止位置继续向左，正是“往左缩”的来源。
+        animateOffset(
+            target: 0,
+            axis: activeDismissAxis,
+            animation: .spring(duration: duration, bounce: 0),
+            duration: duration,
+            completion: .restore
+        )
+    }
+
+    /// Applies one animated offset change and owns its completion.
+    ///
+    /// "The animation has finished" cannot be read off the offset value: the
+    /// `AnimatableModifier` that used to watch for the target value re-evaluated
+    /// this whole surface on every animation frame, and could report the target
+    /// before a single frame had been drawn, which cleared the sheet in the
+    /// middle of its own dismissal slide. Waiting out the animation's own
+    /// duration on the main actor is cheaper and predictable: the completion
+    /// never runs before the surface has left the screen, and the generation
+    /// token invalidates it as soon as another animation takes over.
+    private func animateOffset(
+        target: CGFloat,
+        axis: SubpostSheetDismissAxis?,
+        animation: Animation,
+        duration: TimeInterval,
+        completion: SubpostAnimationCompletion?
+    ) {
+        animationGeneration &+= 1
+        let generation = animationGeneration
+        withAnimation(animation) {
+            switch axis {
+            case .rightSwipe:
+                horizontalOffset = target
                 verticalOffset = 0
-            } completion: {
+            case .pullDown:
+                verticalOffset = target
+                horizontalOffset = 0
+            case nil:
+                verticalOffset = target
+            }
+        }
+        guard let completion else { return }
+        Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: UInt64((duration + 0.04) * 1_000_000_000)
+            )
+            guard generation == animationGeneration else { return }
+            switch completion {
+            case .dismiss:
+                guard phase == .dismissing else { return }
+                onDismiss()
+            case .restore:
                 guard phase == .restoring else { return }
                 horizontalOffset = 0
                 verticalOffset = 0
                 activeDismissAxis = nil
                 phase = .idle
             }
-        } else {
-            beginLegacyAnimation(
-                target: 0,
-                axis: restoringAxis,
-                animation: .spring(duration: duration, bounce: reduceMotion ? 0 : 0.08),
-                completion: .restore
-            )
         }
-    }
-
-    private func beginLegacyAnimation(
-        target: CGFloat,
-        axis: SubpostSheetDismissAxis?,
-        animation: Animation,
-        completion: SubpostLegacyAnimationCompletion
-    ) {
-        legacyAnimationGeneration &+= 1
-        legacyAnimationTarget = target
-        legacyAnimationCompletion = completion
-        withAnimation(animation) {
-            if axis == .rightSwipe {
-                horizontalOffset = target
-            } else {
-                verticalOffset = target
-            }
-        }
-    }
-
-    private func completeLegacyAnimation(generation: UInt) {
-        guard generation == legacyAnimationGeneration,
-              let completion = legacyAnimationCompletion else { return }
-        cancelLegacyAnimationCompletion()
-        switch completion {
-        case .dismiss:
-            guard phase == .dismissing else { return }
-            onDismiss()
-        case .restore:
-            guard phase == .restoring else { return }
-            horizontalOffset = 0
-            verticalOffset = 0
-            activeDismissAxis = nil
-            phase = .idle
-        }
-    }
-
-    private func cancelLegacyAnimationCompletion() {
-        legacyAnimationGeneration &+= 1
-        legacyAnimationTarget = nil
-        legacyAnimationCompletion = nil
     }
 
     /// SwiftUI's `DragGesture` does not expose UIKit's cancelled/failed states.
@@ -643,7 +611,7 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
     /// surface or a permanently rejected gesture.
     private func cancelInterruptedGesture() {
         guard phase != .dismissing else { return }
-        cancelLegacyAnimationCompletion()
+        animationGeneration &+= 1
         phase = .idle
         horizontalOffset = 0
         verticalOffset = 0
@@ -761,12 +729,23 @@ private struct SubpostSheetTransparentHostInstaller: UIViewControllerRepresentab
 /// finger movement must not reach the list; a pull-down dismissal keeps the
 /// scroll view live because reaching the content top is what starts it (and on
 /// iOS 16 the scroll view's own pan is the only signal that reports it).
+///
+/// The freeze also covers the horizontal slide-out that follows the release:
+/// re-enabling the scroll view in the same frame as the release lets UIKit
+/// resume the pan recogniser it cancelled mid-touch, which snaps the content
+/// offset and costs frames exactly while the dismissal animates.
 enum SubpostSheetContentScrollPolicy {
     static func locksScrolling(
         phase: SubpostSheetDismissPhase,
         axis: SubpostSheetDismissAxis?
     ) -> Bool {
-        phase == .tracking && axis == .rightSwipe
+        guard axis == .rightSwipe else { return false }
+        switch phase {
+        case .tracking, .dismissing:
+            return true
+        case .idle, .restoring:
+            return false
+        }
     }
 }
 
@@ -778,6 +757,11 @@ enum SubpostRightSwipeDismissPolicy {
     static let predictedCompletionDistance: CGFloat = 180
     static let predictionDuration: CGFloat = 0.18
     static let maximumInteractiveOffsetFraction: CGFloat = 0.72
+    /// 滑出动画的时长下限/上限与最低假定速度：慢速松手也要看得见滑动，快速甩出
+    /// 也不能长到像在等待。
+    static let minimumCompletionSpeed: CGFloat = 1_100
+    static let minimumCompletionDuration: TimeInterval = 0.18
+    static let maximumCompletionDuration: TimeInterval = 0.34
 
     static func shouldBegin(translation: CGSize) -> Bool {
         translation.width > 0
@@ -796,6 +780,27 @@ enum SubpostRightSwipeDismissPolicy {
 
     static func predictedTranslation(translationX: CGFloat, velocityX: CGFloat) -> CGFloat {
         max(translationX + velocityX * predictionDuration, 0)
+    }
+
+    /// 松手速度由预测位移反推：预测位移 = 实际位移 + 速度 × 预测时长。
+    static func releaseVelocity(
+        translationX: CGFloat,
+        predictedTranslationX: CGFloat
+    ) -> CGFloat {
+        (predictedTranslationX - translationX) / predictionDuration
+    }
+
+    /// 滑出动画时长 = 剩余距离 ÷ 松手速度，钳制在下限与上限之间。
+    static func completionDuration(
+        remainingDistance: CGFloat,
+        releaseVelocity: CGFloat
+    ) -> TimeInterval {
+        let distance = max(remainingDistance, 1)
+        let speed = max(abs(releaseVelocity), minimumCompletionSpeed)
+        return min(
+            max(Double(distance / speed), minimumCompletionDuration),
+            maximumCompletionDuration
+        )
     }
 
     static func shouldFinish(

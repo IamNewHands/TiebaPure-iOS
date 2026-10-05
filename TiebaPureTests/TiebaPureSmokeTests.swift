@@ -3541,14 +3541,27 @@ final class TiebaPureSmokeTests: XCTestCase {
         ))
     }
 
-    func testSubpostSheetContentScrollLocksOnlyDuringHorizontalDismissal() {
+    func testSubpostSheetContentScrollLocksOnlyForHorizontalSwipe() {
         XCTAssertTrue(SubpostSheetContentScrollPolicy.locksScrolling(
             phase: .tracking,
+            axis: .rightSwipe
+        ))
+        // 滑出动画期间保持冻结：同一帧里恢复滚动会让 UIKit 接回被中断的 pan 手势。
+        XCTAssertTrue(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .dismissing,
             axis: .rightSwipe
         ))
         XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
             phase: .tracking,
             axis: .pullDown
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .dismissing,
+            axis: .pullDown
+        ))
+        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
+            phase: .dismissing,
+            axis: nil
         ))
         XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
             phase: .idle,
@@ -3562,10 +3575,52 @@ final class TiebaPureSmokeTests: XCTestCase {
             phase: .restoring,
             axis: .rightSwipe
         ))
-        XCTAssertFalse(SubpostSheetContentScrollPolicy.locksScrolling(
-            phase: .dismissing,
-            axis: .rightSwipe
-        ))
+    }
+
+    func testSubpostRightSwipeDismissGlidesOutAtReleaseSpeed() {
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.releaseVelocity(
+                translationX: 40,
+                predictedTranslationX: 220
+            ),
+            1_000,
+            accuracy: 0.001
+        )
+        // 快速甩出：时长由剩余距离 ÷ 松手速度推出，起步速度接近手指速度。
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.completionDuration(
+                remainingDistance: 382,
+                releaseVelocity: 1_222
+            ),
+            0.3126,
+            accuracy: 0.001
+        )
+        // 慢速松手：不短于下限，也不长于上限。
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.completionDuration(
+                remainingDistance: 382,
+                releaseVelocity: 100
+            ),
+            0.34,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.completionDuration(
+                remainingDistance: 10,
+                releaseVelocity: 0
+            ),
+            0.18,
+            accuracy: 0.001
+        )
+        // 向左回收（负速度）按速度大小取时长，不会把动画拉长。
+        XCTAssertEqual(
+            SubpostRightSwipeDismissPolicy.completionDuration(
+                remainingDistance: 1_000,
+                releaseVelocity: -1_100
+            ),
+            0.34,
+            accuracy: 0.001
+        )
     }
 
     func testAboutViewVersionFormatterFormatsShortAndBuildVersions() {
