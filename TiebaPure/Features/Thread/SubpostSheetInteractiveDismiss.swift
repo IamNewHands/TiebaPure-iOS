@@ -354,9 +354,12 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase == .tracking else { return }
         switch activeDismissAxis {
         case .rightSwipe:
-            // 用户要求：右滑退出时页面保持固定，不跟随手指拖动移位，避免生硬感；
-            // 待手势松开判定退出后直接以流畅动画向右滑出。
-            horizontalOffset = 0
+            // 用户要求：右滑拖动阶段保持垂直位移固定（不上下移动），
+            // 水平位移跟手左右移动（往左拉可撤回取消退出）。
+            horizontalOffset = SubpostRightSwipeDismissPolicy.horizontalOffset(
+                translationX: translation.width,
+                containerWidth: containerSize.width
+            )
             verticalOffset = 0
         case .pullDown:
             verticalOffset = SubpostPullDownDismissPolicy.verticalOffset(
@@ -490,13 +493,12 @@ struct SubpostSheetInteractiveDismissSurface<Content: View>: View {
         guard phase != .dismissing else { return }
         phase = .dismissing
 
+        let duration = reduceMotion ? 0.12 : 0.24
         let isRightSwipe = activeDismissAxis == .rightSwipe
         let targetOffset = isRightSwipe
             ? max(containerSize.width + 32, 1)
             : max(containerSize.height + 32, 1)
-        let animation: Animation = isRightSwipe
-            ? .easeInOut(duration: reduceMotion ? 0.12 : 0.24)
-            : .easeIn(duration: reduceMotion ? 0.12 : 0.24)
+        let animation: Animation = .easeIn(duration: duration)
 
         if #available(iOS 17.0, *) {
             cancelLegacyAnimationCompletion()
@@ -750,6 +752,10 @@ enum SubpostRightSwipeDismissPolicy {
         containerWidth: CGFloat
     ) -> Bool {
         guard containerWidth > 0 else { return false }
+        // 用户向左拉撤回：预测位移小于实际位移（正在向左移动）时，除非已拖过大半屏，否则判定为取消退出
+        if predictedTranslationX < translationX {
+            return translationX >= containerWidth * 0.5 && predictedTranslationX >= containerWidth * 0.4
+        }
         return translationX >= completionDistance
             || translationX / containerWidth >= completionProgress
             || predictedTranslationX >= predictedCompletionDistance

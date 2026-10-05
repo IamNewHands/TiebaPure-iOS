@@ -3524,6 +3524,21 @@ final class TiebaPureSmokeTests: XCTestCase {
             predictedTranslationX: 100,
             containerWidth: 390
         ))
+        XCTAssertFalse(SubpostRightSwipeDismissPolicy.shouldFinish(
+            translationX: 100,
+            predictedTranslationX: 40,
+            containerWidth: 390
+        ))
+        XCTAssertFalse(SubpostRightSwipeDismissPolicy.shouldFinish(
+            translationX: 120,
+            predictedTranslationX: -20,
+            containerWidth: 390
+        ))
+        XCTAssertTrue(SubpostRightSwipeDismissPolicy.shouldFinish(
+            translationX: 240,
+            predictedTranslationX: 180,
+            containerWidth: 390
+        ))
     }
 
     func testAboutViewVersionFormatterFormatsShortAndBuildVersions() {
