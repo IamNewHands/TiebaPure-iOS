@@ -6,11 +6,11 @@ enum TiebaEndpoint {
     static let protobufBase = URL(string: "https://tiebac.baidu.com")!
     static let socialBase = URL(string: "https://tiebac.baidu.com")!
 
+    /// The login route, and the only one: a session is established and a write
+    /// token is minted here. It lives on the protobuf host and carries no sync
+    /// channel fields, which is what makes it answer immediately — the app
+    /// host's `/c/s/login` parks the request for the poll window instead.
     case login
-    /// The write-token route: the same path as `login`, but on the protobuf
-    /// host and without the sync channel fields. That pairing is what makes it
-    /// answer immediately, and minting a write token is now its only use.
-    case postingLogin
     case initNickname
     case webMyInfo
     case followedForums
@@ -52,8 +52,6 @@ enum TiebaEndpoint {
     var url: URL {
         switch self {
         case .login:
-            return Self.appBase.appending(path: "/c/s/login")
-        case .postingLogin:
             return Self.protobufBase.appending(path: "/c/s/login")
         case .initNickname:
             return Self.appBase.appending(path: "/c/s/initNickname")

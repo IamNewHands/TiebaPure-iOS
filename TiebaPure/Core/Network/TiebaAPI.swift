@@ -11,11 +11,7 @@ struct TiebaAPI {
         }
         let loginResponse: LoginResponseDTO?
         do {
-            loginResponse = try await login(
-                bduss: cookies.bduss,
-                stoken: cookies.stoken,
-                baiduID: cookies.baiduID ?? ""
-            )
+            loginResponse = try await writeTokenLogin(bduss: cookies.bduss)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -48,7 +44,8 @@ struct TiebaAPI {
         return account
     }
 
-    /// The write-token handshake, and the only place that mints one.
+    /// The login route: a session is established and a write token is minted
+    /// here, and this is the only place either happens.
     ///
     /// `/c/s/login` on the app host is the client's sync channel: it carries
     /// `channel_id` / `authsid` and parks the request for the poll window
@@ -56,54 +53,20 @@ struct TiebaAPI {
     /// calls in a row, while the delete it preceded answered in 0.3s — the
     /// token, not the write, was the entire wait.
     ///
-    /// The same path on the protobuf host, asked with only the credential, is
-    /// the route the posting layer has always used to mint a token, so every
-    /// write token now comes from here. Callers keep their own error mapping:
-    /// this throws what the transport throws and never inspects `error_code`.
+    /// The same path on the protobuf host, asked with only the credential,
+    /// answers immediately with the same payload, and is the route the posting
+    /// layer has always used. Callers keep their own error mapping: this throws
+    /// what the transport throws and never inspects `error_code`.
     func writeTokenLogin(bduss: String) async throws -> LoginResponseDTO {
         return try await client.postForm(
-            .postingLogin,
+            .login,
             fields: [
-                "_client_version": TiebaContentSubmissionRequestFactory.postingLoginClientVersion,
+                "_client_version": TiebaClientVersion.v22.rawValue,
                 "bdusstoken": bduss
             ],
             headers: [
-                "User-Agent": "tieba/\(TiebaContentSubmissionRequestFactory.postingLoginClientVersion) skin/default"
+                "User-Agent": "tieba/\(TiebaClientVersion.v22.rawValue) skin/default"
             ],
-            signingSecret: "tiebaclient!!!",
-            as: LoginResponseDTO.self
-        )
-    }
-
-    /// The full app login: account, nickname and the sync channel's token. Used
-    /// to establish a session, not to mint a write token — see
-    /// `writeTokenLogin(bduss:)` for why the write path must not use it.
-    func login(bduss: String, stoken: String, baiduID: String = "") async throws -> LoginResponseDTO {
-        let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
-        var fields = requestBuilder.officialCommonFields(
-            baiduID: baiduID,
-            clientVersion: "11.10.8.6",
-            timestamp: timestamp
-        )
-        fields["bdusstoken"] = "\(bduss)|"
-        fields["stoken"] = stoken
-        fields["channel_id"] = ""
-        fields["channel_uid"] = ""
-        fields["authsid"] = "null"
-
-        var headers = requestBuilder.officialHeaders(
-            baiduID: baiduID,
-            clientVersion: "11.10.8.6",
-            timestamp: timestamp
-        )
-        // The login route rejects these headers from the standard client set.
-        headers.removeValue(forKey: "Charset")
-        headers.removeValue(forKey: "client_type")
-
-        return try await client.postForm(
-            .login,
-            fields: fields,
-            headers: headers,
             signingSecret: "tiebaclient!!!",
             as: LoginResponseDTO.self
         )

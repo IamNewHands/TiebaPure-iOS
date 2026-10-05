@@ -884,6 +884,9 @@ final class AuthSessionTests: XCTestCase {
             let path = try XCTUnwrap(request.url?.path)
             switch path {
             case "/c/s/login":
+                // 登录也走 protobuf 主机那条即时返回的路由，不再用应用主机的
+                // 同步长连接（真机实测每次 20.1 秒）。
+                XCTAssertEqual(request.url?.host, "tiebac.baidu.com")
                 return Data(#"{"error_code":"0","anti":{"tbs":"client-tbs"}}"#.utf8)
             case "/c/s/initNickname":
                 return Data("{}".utf8)

@@ -307,7 +307,10 @@ final class UserProfileTests: XCTestCase {
             "portrait": "portrait-token",
             "tbs": "tbs"
         ])
-        XCTAssertEqual(TiebaEndpoint.login.url.host, "c.tieba.baidu.com")
+        // 登录必须落在 protobuf 主机：应用主机那条 `/c/s/login` 是同步长连接，
+        // 实测每次都要停满 20.1 秒才回包。
+        XCTAssertEqual(TiebaEndpoint.login.url.host, "tiebac.baidu.com")
+        XCTAssertEqual(TiebaEndpoint.login.url.path, "/c/s/login")
         XCTAssertEqual(TiebaEndpoint.initNickname.url.host, "c.tieba.baidu.com")
         XCTAssertEqual(TiebaEndpoint.followedForums.url.host, "c.tieba.baidu.com")
         XCTAssertEqual(TiebaEndpoint.followUser.url.host, "tiebac.baidu.com")
