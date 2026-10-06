@@ -254,13 +254,29 @@ enum ReaderTypographyPolicy {
         let standardSpacing: CGFloat
         switch context {
         case .body:
-            standardSpacing = 6
+            standardSpacing = 9
         case .subpost:
-            standardSpacing = 2
+            standardSpacing = 3.5
         case .title:
-            standardSpacing = 6
+            standardSpacing = 9
         }
         return standardSpacing * preference.multiplier
+    }
+
+    static func kern(
+        _ preference: ReaderLineSpacing = .standard,
+        context: ReaderTextContext
+    ) -> CGFloat {
+        let standardKern: CGFloat
+        switch context {
+        case .body:
+            standardKern = 0.45
+        case .subpost:
+            standardKern = 0.25
+        case .title:
+            standardKern = 0.5
+        }
+        return standardKern * preference.multiplier
     }
 }
 

@@ -4208,7 +4208,11 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
 
         XCTAssertGreaterThan(customizedFont.pointSize, standardFont.pointSize)
-        XCTAssertEqual(customizedParagraph.lineSpacing, 6, accuracy: 0.001)
+        XCTAssertEqual(customizedParagraph.lineSpacing, 13.5, accuracy: 0.001)
+        let customizedKern = try XCTUnwrap(
+            customized.attribute(.kern, at: 0, effectiveRange: nil) as? CGFloat
+        )
+        XCTAssertEqual(customizedKern, 0.675, accuracy: 0.001)
         XCTAssertEqual(
             summaryFont.pointSize,
             InlineContentText.Style.preview.font(readerFontSize: .standard).pointSize,
@@ -4243,14 +4247,14 @@ final class TiebaPureSmokeTests: XCTestCase {
             reply.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         )
 
-        XCTAssertEqual(titleParagraph.lineSpacing, 6, accuracy: 0.001)
-        XCTAssertEqual(bodyParagraph.lineSpacing, 6, accuracy: 0.001)
-        XCTAssertEqual(replyParagraph.lineSpacing, 6, accuracy: 0.001)
+        XCTAssertEqual(titleParagraph.lineSpacing, 9, accuracy: 0.001)
+        XCTAssertEqual(bodyParagraph.lineSpacing, 9, accuracy: 0.001)
+        XCTAssertEqual(replyParagraph.lineSpacing, 9, accuracy: 0.001)
     }
 
     func testThreadBodyStyleIsSharedByMainPostAndReplies() throws {
-        // 主楼正文和回复正文必须是同一套排版。正文统一定为 .body（17pt 标准字号 + 6pt 舒适行距），
-        // 谁也改不出单方面的字号或行距，同时避免了 16pt / 4pt 过于紧密局促的问题。
+        // 主楼正文和回复正文必须是同一套排版。正文统一定为 .body（17pt 标准字号 + 9pt 舒展行距 + 0.45pt 字距），
+        // 谁也改不出单方面的字号或行距，彻底解决多行正文紧密拥挤的问题。
         XCTAssertEqual(InlineContentText.Style.threadBody, .body)
 
         let sharedFont = InlineContentText.Style.threadBody.font(readerFontSize: .standard)
@@ -4270,7 +4274,11 @@ final class TiebaPureSmokeTests: XCTestCase {
         let paragraph = try XCTUnwrap(
             mainPostText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         )
-        XCTAssertEqual(paragraph.lineSpacing, 6, accuracy: 0.001)
+        XCTAssertEqual(paragraph.lineSpacing, 9, accuracy: 0.001)
+        let kern = try XCTUnwrap(
+            mainPostText.attribute(.kern, at: 0, effectiveRange: nil) as? CGFloat
+        )
+        XCTAssertEqual(kern, 0.45, accuracy: 0.001)
     }
 
     func testKeywordHighlightedFeedTitleTakesTheBodyLineSpacing() {
@@ -4284,6 +4292,11 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertEqual(
             title.lineSpacing,
             ReaderTypographyPolicy.lineSpacing(.standard, context: .body),
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            title.kern,
+            ReaderTypographyPolicy.kern(.standard, context: .body),
             accuracy: 0.001
         )
     }

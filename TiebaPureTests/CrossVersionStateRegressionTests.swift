@@ -651,50 +651,73 @@ final class CrossVersionStateRegressionTests: XCTestCase,
     func testReaderLineSpacingPreservesExistingDefaultsAndMapsPreferences() {
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .body),
-            6,
+            9,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .subpost),
-            2,
+            3.5,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .body),
-            4.5,
+            6.75,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .body),
-            9,
+            13.5,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .subpost),
-            1.5,
+            2.625,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .subpost),
-            3,
+            5.25,
             accuracy: 0.001
         )
-        // The 标题 heading is set larger than the body, so it keeps a wider gap:
-        // reusing the body's 4pt made a two-line thread title read as cramped
-        // while every reply below it looked fine.
+        // The 标题 heading is set larger than the body, so it keeps a wider gap.
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .title),
-            6,
+            9,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .title),
-            4.5,
+            6.75,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .title),
-            9,
+            13.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.kern(.standard, context: .body),
+            0.45,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.kern(.compact, context: .body),
+            0.3375,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.kern(.relaxed, context: .body),
+            0.675,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.kern(.standard, context: .subpost),
+            0.25,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.kern(.standard, context: .title),
+            0.5,
             accuracy: 0.001
         )
     }

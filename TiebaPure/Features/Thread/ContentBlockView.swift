@@ -206,6 +206,10 @@ private struct NativeInlineContentText: View {
         let font = style.font(readerFontSize: readerFontSize, readerFontFamily: readerFontFamily)
         let maximumNumberOfLines = ThreadContentDisplayPolicy.maximumNumberOfLines(for: lineLimit)
         let content = composedText(font: font)
+            .kerning(ReaderTypographyPolicy.kern(
+                readerLineSpacing,
+                context: style.textContext
+            ))
             .font(Font(font))
             .foregroundStyle(Color(uiColor: style.foregroundColor))
             .lineSpacing(ReaderTypographyPolicy.lineSpacing(
@@ -329,6 +333,10 @@ private struct PlainInlineContentText: View {
     var body: some View {
         let maximumNumberOfLines = ThreadContentDisplayPolicy.maximumNumberOfLines(for: lineLimit)
         let content = Text(verbatim: text)
+            .kerning(ReaderTypographyPolicy.kern(
+                readerLineSpacing,
+                context: style.textContext
+            ))
             .font(Font(style.font(readerFontSize: readerFontSize, readerFontFamily: readerFontFamily)))
             .foregroundStyle(Color(uiColor: style.foregroundColor))
             .lineSpacing(ReaderTypographyPolicy.lineSpacing(
@@ -496,9 +504,11 @@ struct KeywordHighlightedText: View {
     /// 列表里的帖子标题会折行，但这里原来一行加距都没有，两行标题比同一张卡片
     /// 下面的摘要还挤。取正文的加距，和摘要、正文保持同一个 owner。
     var lineSpacing: CGFloat = ReaderTypographyPolicy.lineSpacing(.standard, context: .body)
+    var kern: CGFloat = ReaderTypographyPolicy.kern(.standard, context: .body)
 
     var body: some View {
         composedText
+            .kerning(kern)
             .font(font)
             .lineSpacing(lineSpacing)
             .lineLimit(lineLimit)
@@ -1132,6 +1142,7 @@ struct InlineContentText: UIViewRepresentable {
         var fontName: String
         var fontPointSize: CGFloat
         var fontLineHeight: CGFloat
+        var kern: CGFloat
     }
 
     fileprivate struct RenderedContent {
@@ -1410,7 +1421,8 @@ struct InlineContentText: UIViewRepresentable {
             userLinksEnabled: onOpenUser != nil,
             fontName: font.fontName,
             fontPointSize: font.pointSize,
-            fontLineHeight: font.lineHeight
+            fontLineHeight: font.lineHeight,
+            kern: ReaderTypographyPolicy.kern(readerLineSpacing, context: style.textContext)
         )
     }
 
@@ -1423,21 +1435,28 @@ struct InlineContentText: UIViewRepresentable {
             context: style.textContext
         )
         paragraph.lineBreakMode = ThreadContentDisplayPolicy.paragraphLineBreakMode
+        let kern = ReaderTypographyPolicy.kern(
+            readerLineSpacing,
+            context: style.textContext
+        )
 
         let baseAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: style.foregroundColor,
-            .paragraphStyle: paragraph
+            .paragraphStyle: paragraph,
+            .kern: kern
         ]
         let prefixAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: InlineUserNamePresentation.foregroundColor,
-            .paragraphStyle: paragraph
+            .paragraphStyle: paragraph,
+            .kern: kern
         ]
         let highlightAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: UIColor.systemRed,
-            .paragraphStyle: paragraph
+            .paragraphStyle: paragraph,
+            .kern: kern
         ]
 
         let resolvedPrefixParts = prefixParts.isEmpty ? legacyPrefixParts : prefixParts
