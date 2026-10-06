@@ -1093,10 +1093,8 @@ struct InlineContentText: UIViewRepresentable {
 
         /// Every floor's 正文 — the 主楼 and the replies under it — renders with
         /// this one style, so neither can take a size or leading the other does
-        /// not have. They were split once (主楼 on the 17pt `.body` face with a
-        /// 6pt gap, replies on the 16pt `.reply` face with 4pt) and the reader saw
-        /// the first floor as 明显不一致 with floor 3.
-        static let threadBody: Style = .reply
+        /// not have.
+        static let threadBody: Style = .body
     }
 
     let blocks: [ContentBlock]

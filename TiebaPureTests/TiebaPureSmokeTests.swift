@@ -4244,23 +4244,22 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
 
         XCTAssertEqual(titleParagraph.lineSpacing, 6, accuracy: 0.001)
-        XCTAssertEqual(bodyParagraph.lineSpacing, 4, accuracy: 0.001)
-        XCTAssertEqual(replyParagraph.lineSpacing, 4, accuracy: 0.001)
+        XCTAssertEqual(bodyParagraph.lineSpacing, 6, accuracy: 0.001)
+        XCTAssertEqual(replyParagraph.lineSpacing, 6, accuracy: 0.001)
     }
 
     func testThreadBodyStyleIsSharedByMainPostAndReplies() throws {
-        // 主楼正文和回复正文必须是同一套排版。它们曾被拆成两套（主楼 17pt/6pt、
-        // 回复 16pt/4pt），读者一眼就看出第一楼和第三楼“明显不一致”，所以两条
-        // 路径现在钉在同一个 owner 上，谁也改不出单方面的字号或行距。
-        XCTAssertEqual(InlineContentText.Style.threadBody, .reply)
+        // 主楼正文和回复正文必须是同一套排版。正文统一定为 .body（17pt 标准字号 + 6pt 舒适行距），
+        // 谁也改不出单方面的字号或行距，同时避免了 16pt / 4pt 过于紧密局促的问题。
+        XCTAssertEqual(InlineContentText.Style.threadBody, .body)
 
         let sharedFont = InlineContentText.Style.threadBody.font(readerFontSize: .standard)
-        let replyFont = InlineContentText.Style.reply.font(readerFontSize: .standard)
-        XCTAssertEqual(sharedFont.pointSize, replyFont.pointSize, accuracy: 0.001)
-        XCTAssertEqual(sharedFont.fontName, replyFont.fontName)
+        let bodyFont = InlineContentText.Style.body.font(readerFontSize: .standard)
+        XCTAssertEqual(sharedFont.pointSize, bodyFont.pointSize, accuracy: 0.001)
+        XCTAssertEqual(sharedFont.fontName, bodyFont.fontName)
         XCTAssertEqual(
             InlineContentText.Style.threadBody.emoticonSize,
-            InlineContentText.Style.reply.emoticonSize,
+            InlineContentText.Style.body.emoticonSize,
             accuracy: 0.001
         )
 
@@ -4271,7 +4270,7 @@ final class TiebaPureSmokeTests: XCTestCase {
         let paragraph = try XCTUnwrap(
             mainPostText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         )
-        XCTAssertEqual(paragraph.lineSpacing, 4, accuracy: 0.001)
+        XCTAssertEqual(paragraph.lineSpacing, 6, accuracy: 0.001)
     }
 
     func testKeywordHighlightedFeedTitleTakesTheBodyLineSpacing() {

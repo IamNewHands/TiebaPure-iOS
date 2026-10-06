@@ -254,7 +254,7 @@ enum ReaderTypographyPolicy {
         let standardSpacing: CGFloat
         switch context {
         case .body:
-            standardSpacing = 4
+            standardSpacing = 6
         case .subpost:
             standardSpacing = 2
         case .title:

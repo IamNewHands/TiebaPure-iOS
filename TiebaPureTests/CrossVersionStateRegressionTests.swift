@@ -651,7 +651,7 @@ final class CrossVersionStateRegressionTests: XCTestCase,
     func testReaderLineSpacingPreservesExistingDefaultsAndMapsPreferences() {
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .body),
-            4,
+            6,
             accuracy: 0.001
         )
         XCTAssertEqual(
@@ -661,12 +661,12 @@ final class CrossVersionStateRegressionTests: XCTestCase,
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .body),
-            3,
+            4.5,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .body),
-            6,
+            9,
             accuracy: 0.001
         )
         XCTAssertEqual(

@@ -3013,7 +3013,7 @@ private struct SubpostListSheet: View {
                                     VStack(alignment: .leading, spacing: ThreadReplyLayout.bodyStackSpacing) {
                                         ContentBlocksView(
                                             blocks: post.blocks,
-                                            textStyle: .reply,
+                                            textStyle: .threadBody,
                                             lineLimit: ThreadContentDisplayPolicy.detailLineLimit,
                                             readerFontSize: readingPreferences.fontSize,
                                             readerFontFamily: readingPreferences.fontFamily,
