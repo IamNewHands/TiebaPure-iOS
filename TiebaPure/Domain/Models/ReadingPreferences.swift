@@ -254,11 +254,11 @@ enum ReaderTypographyPolicy {
         let standardSpacing: CGFloat
         switch context {
         case .body:
-            standardSpacing = 9
+            standardSpacing = 8
         case .subpost:
-            standardSpacing = 3.5
+            standardSpacing = 3
         case .title:
-            standardSpacing = 9
+            standardSpacing = 8
         }
         return standardSpacing * preference.multiplier
     }

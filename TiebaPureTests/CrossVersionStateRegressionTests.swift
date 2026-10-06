@@ -651,48 +651,48 @@ final class CrossVersionStateRegressionTests: XCTestCase,
     func testReaderLineSpacingPreservesExistingDefaultsAndMapsPreferences() {
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .body),
-            9,
+            8,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .subpost),
-            3.5,
+            3,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .body),
-            6.75,
+            6,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .body),
-            13.5,
+            12,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .subpost),
-            2.625,
+            2.25,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .subpost),
-            5.25,
+            4.5,
             accuracy: 0.001
         )
         // The 标题 heading is set larger than the body, so it keeps a wider gap.
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.standard, context: .title),
-            9,
+            8,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.compact, context: .title),
-            6.75,
+            6,
             accuracy: 0.001
         )
         XCTAssertEqual(
             ReaderTypographyPolicy.lineSpacing(.relaxed, context: .title),
-            13.5,
+            12,
             accuracy: 0.001
         )
         XCTAssertEqual(

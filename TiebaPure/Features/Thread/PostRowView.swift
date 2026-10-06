@@ -49,7 +49,7 @@ struct PostRowView: View {
         ) {
             VStack(
                 alignment: .leading,
-                spacing: isMainPost ? TiebaPureTheme.Spacing.md : ThreadReplyLayout.headerContentSpacing
+                spacing: isMainPost ? TiebaPureTheme.Spacing.xxs : ThreadReplyLayout.headerContentSpacing
             ) {
                 UserHeaderView(
                     author: post.author,
@@ -81,7 +81,7 @@ struct PostRowView: View {
                             accessibilityIdentifier: "thread-main-title"
                         )
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.bottom, TiebaPureTheme.Spacing.sm)
+                            .padding(.bottom, TiebaPureTheme.Spacing.xs)
                     }
 
                     ContentBlocksView(
@@ -323,7 +323,7 @@ enum ThreadAuthorIdentityLayout {
 
 enum ThreadReplyLayout {
     static let bodyLeadingInset = ThreadAuthorIdentityLayout.replyAvatarSize + TiebaPureTheme.Spacing.sm
-    static let headerContentSpacing: CGFloat = TiebaPureTheme.Spacing.xxs
+    static let headerContentSpacing: CGFloat = 2
     static let bodyStackSpacing: CGFloat = 0
     static let metadataHitHeight: CGFloat = 44
     static let sectionSeparatorHeight: CGFloat = TiebaPureTheme.Spacing.xs

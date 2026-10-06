@@ -4208,7 +4208,7 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
 
         XCTAssertGreaterThan(customizedFont.pointSize, standardFont.pointSize)
-        XCTAssertEqual(customizedParagraph.lineSpacing, 13.5, accuracy: 0.001)
+        XCTAssertEqual(customizedParagraph.lineSpacing, 12, accuracy: 0.001)
         let customizedKern = try XCTUnwrap(
             customized.attribute(.kern, at: 0, effectiveRange: nil) as? CGFloat
         )
@@ -4247,13 +4247,13 @@ final class TiebaPureSmokeTests: XCTestCase {
             reply.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         )
 
-        XCTAssertEqual(titleParagraph.lineSpacing, 9, accuracy: 0.001)
-        XCTAssertEqual(bodyParagraph.lineSpacing, 9, accuracy: 0.001)
-        XCTAssertEqual(replyParagraph.lineSpacing, 9, accuracy: 0.001)
+        XCTAssertEqual(titleParagraph.lineSpacing, 8, accuracy: 0.001)
+        XCTAssertEqual(bodyParagraph.lineSpacing, 8, accuracy: 0.001)
+        XCTAssertEqual(replyParagraph.lineSpacing, 8, accuracy: 0.001)
     }
 
     func testThreadBodyStyleIsSharedByMainPostAndReplies() throws {
-        // 主楼正文和回复正文必须是同一套排版。正文统一定为 .body（17pt 标准字号 + 9pt 舒展行距 + 0.45pt 字距），
+        // 主楼正文和回复正文必须是同一套排版。正文统一定为 .body（17pt 标准字号 + 8pt 舒展行距 + 0.45pt 字距），
         // 谁也改不出单方面的字号或行距，彻底解决多行正文紧密拥挤的问题。
         XCTAssertEqual(InlineContentText.Style.threadBody, .body)
 
@@ -4274,7 +4274,7 @@ final class TiebaPureSmokeTests: XCTestCase {
         let paragraph = try XCTUnwrap(
             mainPostText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         )
-        XCTAssertEqual(paragraph.lineSpacing, 9, accuracy: 0.001)
+        XCTAssertEqual(paragraph.lineSpacing, 8, accuracy: 0.001)
         let kern = try XCTUnwrap(
             mainPostText.attribute(.kern, at: 0, effectiveRange: nil) as? CGFloat
         )
