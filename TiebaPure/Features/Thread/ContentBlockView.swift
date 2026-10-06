@@ -1005,10 +1005,6 @@ struct InlineContentText: UIViewRepresentable {
 
     enum Style: Equatable {
         case body
-        /// The thread's 主楼 body. Same face and size as `.body`, but it is the
-        /// long paragraph a reader actually reads line by line, so it keeps a
-        /// wider leading than the one- and two-line replies below it.
-        case mainPost
         case title
         case preview
         case reply
@@ -1019,7 +1015,7 @@ struct InlineContentText: UIViewRepresentable {
             readerFontFamily: ReaderFontFamily = .system
         ) -> UIFont {
             switch self {
-            case .body, .mainPost:
+            case .body:
                 return ReaderTypographyPolicy.font(
                     textStyle: .body,
                     fontSize: readerFontSize,
@@ -1057,7 +1053,7 @@ struct InlineContentText: UIViewRepresentable {
             switch self {
             case .preview:
                 return .secondaryLabel
-            case .body, .mainPost, .title, .reply, .subpost:
+            case .body, .title, .reply, .subpost:
                 return .label
             }
         }
@@ -1066,7 +1062,7 @@ struct InlineContentText: UIViewRepresentable {
             switch self {
             case .title:
                 return 26
-            case .body, .mainPost:
+            case .body:
                 return 24
             case .preview:
                 return 20
@@ -1078,22 +1074,26 @@ struct InlineContentText: UIViewRepresentable {
         }
 
         /// Which reader leading this style uses. The 标题 heading is set larger
-        /// than the body, and the 主楼 body is the long paragraph a reader
-        /// spends the most lines on, so both take their own gap instead of the
-        /// reply-sized one.
+        /// than the body it introduces, so it takes its own wider gap; every
+        /// other run of text uses the body's.
         var textContext: ReaderTextContext {
             switch self {
             case .subpost:
                 return .subpost
             case .title:
                 return .title
-            case .mainPost:
-                return .mainPost
             case .body, .preview, .reply:
                 return .body
             }
         }
     }
+
+    /// Every floor's 正文 — the 主楼 and the replies under it — renders with this
+    /// one style, so neither can take a size or leading the other does not have.
+    /// They were split once (主楼 on the 17pt `.body` face with a 6pt gap, replies
+    /// on the 16pt `.reply` face with 4pt) and the reader saw the first floor as
+    /// 明显不一致 with floor 3.
+    static let threadBody: Style = .reply
 
     let blocks: [ContentBlock]
     var style: Style = .body

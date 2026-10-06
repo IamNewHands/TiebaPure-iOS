@@ -206,9 +206,6 @@ struct ReadingPreferences: Equatable, Sendable {
 enum ReaderTextContext: Equatable, Sendable {
     case body
     case subpost
-    /// The 主楼 body: the one long paragraph a reader follows line by line, so
-    /// it takes a wider gap than the short replies below it.
-    case mainPost
     /// A heading is set larger than the body it introduces, so it needs its own
     /// leading. Reusing the body's gap under a 22pt semibold 标题 leaves the two
     /// heading lines visibly tighter than every reply below them.
@@ -260,8 +257,6 @@ enum ReaderTypographyPolicy {
             standardSpacing = 4
         case .subpost:
             standardSpacing = 2
-        case .mainPost:
-            standardSpacing = 6
         case .title:
             standardSpacing = 6
         }

@@ -4248,26 +4248,30 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertEqual(replyParagraph.lineSpacing, 4, accuracy: 0.001)
     }
 
-    func testInlineContentMainPostUsesWiderLineSpacingThanReplies() throws {
-        // 主楼正文 is one long paragraph; the replies under it are one to three
-        // lines. Sharing the reply-sized 4pt gap left the 主楼 reading cramped,
-        // so the main post takes the wider gap and replies keep theirs.
-        func lineSpacing(of style: InlineContentText.Style) throws -> CGFloat {
-            let text = InlineContentText(
-                blocks: [.text("感觉现在不是反套路的玄幻，就是套皮玄幻的言情。")],
-                style: style
-            ).attributedString()
-            let paragraph = try XCTUnwrap(
-                text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
-            )
-            return paragraph.lineSpacing
-        }
+    func testThreadBodyStyleIsSharedByMainPostAndReplies() throws {
+        // 主楼正文和回复正文必须是同一套排版。它们曾被拆成两套（主楼 17pt/6pt、
+        // 回复 16pt/4pt），读者一眼就看出第一楼和第三楼“明显不一致”，所以两条
+        // 路径现在钉在同一个 owner 上，谁也改不出单方面的字号或行距。
+        XCTAssertEqual(InlineContentText.Style.threadBody, .reply)
 
-        XCTAssertEqual(try lineSpacing(of: .mainPost), 6, accuracy: 0.001)
-        XCTAssertEqual(try lineSpacing(of: .reply), 4, accuracy: 0.001)
-        XCTAssertEqual(try lineSpacing(of: .body), 4, accuracy: 0.001)
-        XCTAssertEqual(try lineSpacing(of: .subpost), 2, accuracy: 0.001)
-        XCTAssertEqual(try lineSpacing(of: .preview), 4, accuracy: 0.001)
+        let sharedFont = InlineContentText.Style.threadBody.font(readerFontSize: .standard)
+        let replyFont = InlineContentText.Style.reply.font(readerFontSize: .standard)
+        XCTAssertEqual(sharedFont.pointSize, replyFont.pointSize, accuracy: 0.001)
+        XCTAssertEqual(sharedFont.fontName, replyFont.fontName)
+        XCTAssertEqual(
+            InlineContentText.Style.threadBody.emoticonSize,
+            InlineContentText.Style.reply.emoticonSize,
+            accuracy: 0.001
+        )
+
+        let mainPostText = InlineContentText(
+            blocks: [.text("感觉现在不是反套路的玄幻，就是套皮玄幻的言情。")],
+            style: .threadBody
+        ).attributedString()
+        let paragraph = try XCTUnwrap(
+            mainPostText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+        XCTAssertEqual(paragraph.lineSpacing, 4, accuracy: 0.001)
     }
 
     func testInlineReplyUserNamesStaySecondaryWhenUIDIsMissing() throws {

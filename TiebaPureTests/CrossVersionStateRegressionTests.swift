@@ -697,23 +697,6 @@ final class CrossVersionStateRegressionTests: XCTestCase,
             9,
             accuracy: 0.001
         )
-        // The 主楼 body is the long paragraph a reader follows line by line, so
-        // it keeps the same wider gap while the short replies stay at 4pt.
-        XCTAssertEqual(
-            ReaderTypographyPolicy.lineSpacing(.standard, context: .mainPost),
-            6,
-            accuracy: 0.001
-        )
-        XCTAssertEqual(
-            ReaderTypographyPolicy.lineSpacing(.compact, context: .mainPost),
-            4.5,
-            accuracy: 0.001
-        )
-        XCTAssertEqual(
-            ReaderTypographyPolicy.lineSpacing(.relaxed, context: .mainPost),
-            9,
-            accuracy: 0.001
-        )
     }
 
     func testReaderMediaRequestPolicyControlsAutomaticAndFallbackRequests() {

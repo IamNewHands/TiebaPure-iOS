@@ -86,7 +86,10 @@ struct PostRowView: View {
 
                     ContentBlocksView(
                         blocks: post.blocks,
-                        textStyle: isMainPost ? .mainPost : .reply,
+                        // 主楼正文和回复正文共用同一排版（字号、行距、表情尺寸）。
+                        // 这两条路径曾被拆开过，读者一眼就看出第一楼和第三楼
+                        // “明显不一致”，所以正文只有一个 owner。
+                        textStyle: .threadBody,
                         lineLimit: ThreadContentDisplayPolicy.detailLineLimit,
                         readerFontSize: readingPreferences.fontSize,
                         readerFontFamily: readingPreferences.fontFamily,
