@@ -4274,6 +4274,21 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertEqual(paragraph.lineSpacing, 4, accuracy: 0.001)
     }
 
+    func testKeywordHighlightedFeedTitleTakesTheBodyLineSpacing() {
+        // 列表里的帖子标题会折行，原来没有任何加距，比同卡片下面的摘要还挤。
+        let title = KeywordHighlightedText(
+            text: "传统玄幻后宫文是不是要灭绝了",
+            keyword: nil,
+            font: .body.weight(.semibold),
+            lineLimit: 3
+        )
+        XCTAssertEqual(
+            title.lineSpacing,
+            ReaderTypographyPolicy.lineSpacing(.standard, context: .body),
+            accuracy: 0.001
+        )
+    }
+
     func testInlineReplyUserNamesStaySecondaryWhenUIDIsMissing() throws {
         let text = InlineContentText(
             blocks: [.mention(userID: nil, text: "被回复用户")],

@@ -493,10 +493,14 @@ struct KeywordHighlightedText: View {
     var font: Font
     var lineLimit: Int
     var defaultColor: Color = .primary
+    /// 列表里的帖子标题会折行，但这里原来一行加距都没有，两行标题比同一张卡片
+    /// 下面的摘要还挤。取正文的加距，和摘要、正文保持同一个 owner。
+    var lineSpacing: CGFloat = ReaderTypographyPolicy.lineSpacing(.standard, context: .body)
 
     var body: some View {
         composedText
             .font(font)
+            .lineSpacing(lineSpacing)
             .lineLimit(lineLimit)
     }
 
