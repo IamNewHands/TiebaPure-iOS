@@ -1168,6 +1168,10 @@ struct ForumThreadRow: View {
                         isInteractive: onOpenMedia != nil || onOpenThread != nil,
                         destinationAccessibilityLabel: onOpenMedia == nil ? "打开帖子" : nil,
                         destinationAccessibilityHint: onOpenMedia == nil ? "进入帖子详情" : nil,
+                        // A list thumbnail is the first look at a post's 动图;
+                        // the still CDN preview paints first and the animation
+                        // replaces it once the CDN confirms the original.
+                        prefersAnimatedOriginal: true,
                         onTap: { item, sourceFrame, sourceImage, sourceAnchor in
                             if let onOpenMedia {
                                 guard ForumThreadTapPolicy.destination(for: .media) == .media else { return }

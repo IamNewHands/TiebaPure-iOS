@@ -50,6 +50,10 @@ struct MediaGridView: View {
     let isInteractive: Bool
     let destinationAccessibilityLabel: String?
     let destinationAccessibilityHint: String?
+    /// List surfaces show a post's 动图 as a still CDN preview unless this is
+    /// on, in which case a thumbnail whose original is animated is replaced by
+    /// the animation once the CDN confirms it.
+    let prefersAnimatedOriginal: Bool
     let onTap: (ReaderMediaItem, CGRect?, UIImage?, ImagePreviewSourceAnchor?) -> Void
 
     init(
@@ -60,6 +64,7 @@ struct MediaGridView: View {
         isInteractive: Bool = true,
         destinationAccessibilityLabel: String? = nil,
         destinationAccessibilityHint: String? = nil,
+        prefersAnimatedOriginal: Bool = false,
         onTap: @escaping (ReaderMediaItem, CGRect?, UIImage?, ImagePreviewSourceAnchor?) -> Void = { _, _, _, _ in }
     ) {
         self.items = items
@@ -69,6 +74,7 @@ struct MediaGridView: View {
         self.isInteractive = isInteractive
         self.destinationAccessibilityLabel = destinationAccessibilityLabel
         self.destinationAccessibilityHint = destinationAccessibilityHint
+        self.prefersAnimatedOriginal = prefersAnimatedOriginal
         self.onTap = onTap
     }
 
@@ -134,6 +140,7 @@ struct MediaGridView: View {
                     totalItemCount: totalItemCount,
                     destinationAccessibilityLabel: destinationAccessibilityLabel,
                     destinationAccessibilityHint: destinationAccessibilityHint,
+                    prefersAnimatedOriginal: prefersAnimatedOriginal,
                     onTap: onTap
                 )
             } else {
@@ -146,6 +153,7 @@ struct MediaGridView: View {
                     isManualLoadAuthorized: false,
                     explicitOriginalAuthorization: nil,
                     showsManualLoadIndicator: false,
+                    prefersAnimatedOriginal: prefersAnimatedOriginal,
                     onLoadStateChange: { _ in }
                 )
                 .accessibilityHidden(true)
@@ -186,6 +194,7 @@ private struct MediaItemButton: View {
     let totalItemCount: Int
     let destinationAccessibilityLabel: String?
     let destinationAccessibilityHint: String?
+    let prefersAnimatedOriginal: Bool
     let onTap: (ReaderMediaItem, CGRect?, UIImage?, ImagePreviewSourceAnchor?) -> Void
 
     @State private var loadState: TiebaRemoteImageLoadState = .empty
@@ -202,6 +211,7 @@ private struct MediaItemButton: View {
         totalItemCount: Int,
         destinationAccessibilityLabel: String?,
         destinationAccessibilityHint: String?,
+        prefersAnimatedOriginal: Bool = false,
         onTap: @escaping (ReaderMediaItem, CGRect?, UIImage?, ImagePreviewSourceAnchor?) -> Void
     ) {
         self.item = item
@@ -211,6 +221,7 @@ private struct MediaItemButton: View {
         self.totalItemCount = totalItemCount
         self.destinationAccessibilityLabel = destinationAccessibilityLabel
         self.destinationAccessibilityHint = destinationAccessibilityHint
+        self.prefersAnimatedOriginal = prefersAnimatedOriginal
         self.onTap = onTap
         _previewSource = StateObject(
             wrappedValue: ImagePreviewSourceAnchor(
@@ -230,6 +241,7 @@ private struct MediaItemButton: View {
                 isManualLoadAuthorized: isManualLoadAuthorized,
                 explicitOriginalAuthorization: explicitFallbackAuthorization,
                 showsManualLoadIndicator: true,
+                prefersAnimatedOriginal: prefersAnimatedOriginal,
                 previewSource: previewSource,
                 onTransitionTap: activate,
                 onLoadStateChange: { state in
@@ -383,6 +395,7 @@ private struct MediaThumbnailView: View {
     let isManualLoadAuthorized: Bool
     let explicitOriginalAuthorization: String?
     let showsManualLoadIndicator: Bool
+    var prefersAnimatedOriginal: Bool = false
     var previewSource: ImagePreviewSourceAnchor? = nil
     var onTransitionTap: (() -> Void)? = nil
     let onLoadStateChange: (TiebaRemoteImageLoadState) -> Void
@@ -428,6 +441,7 @@ private struct MediaThumbnailView: View {
                         showsRetryButton: false,
                         showsResolvedImage: previewSource == nil,
                         loadsAutomatically: isManualLoadAuthorized,
+                        prefersAnimatedOriginal: prefersAnimatedOriginal,
                         onLoadStateChange: { state in
                             if internalLoadState != state {
                                 internalLoadState = state
