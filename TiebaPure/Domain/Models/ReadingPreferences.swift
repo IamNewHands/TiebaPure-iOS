@@ -206,6 +206,10 @@ struct ReadingPreferences: Equatable, Sendable {
 enum ReaderTextContext: Equatable, Sendable {
     case body
     case subpost
+    /// A heading is set larger than the body it introduces, so it needs its own
+    /// leading. Reusing the body's gap under a 22pt semibold 标题 leaves the two
+    /// heading lines visibly tighter than every reply below them.
+    case title
 }
 
 enum ReaderTypographyPolicy {
@@ -247,7 +251,15 @@ enum ReaderTypographyPolicy {
         _ preference: ReaderLineSpacing,
         context: ReaderTextContext
     ) -> CGFloat {
-        let standardSpacing: CGFloat = context == .subpost ? 2 : 4
+        let standardSpacing: CGFloat
+        switch context {
+        case .body:
+            standardSpacing = 4
+        case .subpost:
+            standardSpacing = 2
+        case .title:
+            standardSpacing = 6
+        }
         return standardSpacing * preference.multiplier
     }
 }

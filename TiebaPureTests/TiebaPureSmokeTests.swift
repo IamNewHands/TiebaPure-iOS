@@ -4216,6 +4216,38 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
     }
 
+    func testInlineContentTitleUsesTheHeadingLineSpacing() throws {
+        // A thread 标题 is rendered at .title (title2) while the body below it is
+        // .body; both used to take the body's 4pt gap, which left a two-line
+        // heading visibly tighter than the replies under it.
+        let title = InlineContentText(
+            blocks: [.text("传统玄幻后宫文是不是要灭绝了")],
+            style: .title
+        ).attributedString()
+        let body = InlineContentText(
+            blocks: [.text("感觉现在不是反套路的玄幻")],
+            style: .body
+        ).attributedString()
+        let reply = InlineContentText(
+            blocks: [.text("铁马飞桥的书全是这种类型的")],
+            style: .reply
+        ).attributedString()
+
+        let titleParagraph = try XCTUnwrap(
+            title.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+        let bodyParagraph = try XCTUnwrap(
+            body.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+        let replyParagraph = try XCTUnwrap(
+            reply.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+
+        XCTAssertEqual(titleParagraph.lineSpacing, 6, accuracy: 0.001)
+        XCTAssertEqual(bodyParagraph.lineSpacing, 4, accuracy: 0.001)
+        XCTAssertEqual(replyParagraph.lineSpacing, 4, accuracy: 0.001)
+    }
+
     func testInlineReplyUserNamesStaySecondaryWhenUIDIsMissing() throws {
         let text = InlineContentText(
             blocks: [.mention(userID: nil, text: "被回复用户")],

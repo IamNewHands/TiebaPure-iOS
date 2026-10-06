@@ -679,6 +679,24 @@ final class CrossVersionStateRegressionTests: XCTestCase,
             3,
             accuracy: 0.001
         )
+        // The 标题 heading is set larger than the body, so it keeps a wider gap:
+        // reusing the body's 4pt made a two-line thread title read as cramped
+        // while every reply below it looked fine.
+        XCTAssertEqual(
+            ReaderTypographyPolicy.lineSpacing(.standard, context: .title),
+            6,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.lineSpacing(.compact, context: .title),
+            4.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ReaderTypographyPolicy.lineSpacing(.relaxed, context: .title),
+            9,
+            accuracy: 0.001
+        )
     }
 
     func testReaderMediaRequestPolicyControlsAutomaticAndFallbackRequests() {

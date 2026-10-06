@@ -210,7 +210,7 @@ private struct NativeInlineContentText: View {
             .foregroundStyle(Color(uiColor: style.foregroundColor))
             .lineSpacing(ReaderTypographyPolicy.lineSpacing(
                 readerLineSpacing,
-                context: style == .subpost ? .subpost : .body
+                context: style.textContext
             ))
             .lineLimit(maximumNumberOfLines == 0 ? nil : maximumNumberOfLines)
             .fixedSize(horizontal: false, vertical: true)
@@ -333,7 +333,7 @@ private struct PlainInlineContentText: View {
             .foregroundStyle(Color(uiColor: style.foregroundColor))
             .lineSpacing(ReaderTypographyPolicy.lineSpacing(
                 readerLineSpacing,
-                context: style == .subpost ? .subpost : .body
+                context: style.textContext
             ))
             .lineLimit(maximumNumberOfLines == 0 ? nil : maximumNumberOfLines)
             .fixedSize(horizontal: false, vertical: true)
@@ -1072,6 +1072,20 @@ struct InlineContentText: UIViewRepresentable {
                 return 18
             }
         }
+
+        /// Which reader leading this style uses. The 标题 heading is the only
+        /// style that renders above the body at a larger point size, so it takes
+        /// the heading gap instead of the body's.
+        var textContext: ReaderTextContext {
+            switch self {
+            case .subpost:
+                return .subpost
+            case .title:
+                return .title
+            case .body, .preview, .reply:
+                return .body
+            }
+        }
     }
 
     let blocks: [ContentBlock]
@@ -1397,7 +1411,7 @@ struct InlineContentText: UIViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = ReaderTypographyPolicy.lineSpacing(
             readerLineSpacing,
-            context: style == .subpost ? .subpost : .body
+            context: style.textContext
         )
         paragraph.lineBreakMode = ThreadContentDisplayPolicy.paragraphLineBreakMode
 
