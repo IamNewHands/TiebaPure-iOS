@@ -4248,6 +4248,28 @@ final class TiebaPureSmokeTests: XCTestCase {
         XCTAssertEqual(replyParagraph.lineSpacing, 4, accuracy: 0.001)
     }
 
+    func testInlineContentMainPostUsesWiderLineSpacingThanReplies() throws {
+        // 主楼正文 is one long paragraph; the replies under it are one to three
+        // lines. Sharing the reply-sized 4pt gap left the 主楼 reading cramped,
+        // so the main post takes the wider gap and replies keep theirs.
+        func lineSpacing(of style: InlineContentText.Style) throws -> CGFloat {
+            let text = InlineContentText(
+                blocks: [.text("感觉现在不是反套路的玄幻，就是套皮玄幻的言情。")],
+                style: style
+            ).attributedString()
+            let paragraph = try XCTUnwrap(
+                text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+            )
+            return paragraph.lineSpacing
+        }
+
+        XCTAssertEqual(try lineSpacing(of: .mainPost), 6, accuracy: 0.001)
+        XCTAssertEqual(try lineSpacing(of: .reply), 4, accuracy: 0.001)
+        XCTAssertEqual(try lineSpacing(of: .body), 4, accuracy: 0.001)
+        XCTAssertEqual(try lineSpacing(of: .subpost), 2, accuracy: 0.001)
+        XCTAssertEqual(try lineSpacing(of: .preview), 4, accuracy: 0.001)
+    }
+
     func testInlineReplyUserNamesStaySecondaryWhenUIDIsMissing() throws {
         let text = InlineContentText(
             blocks: [.mention(userID: nil, text: "被回复用户")],

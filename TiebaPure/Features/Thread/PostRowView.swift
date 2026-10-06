@@ -86,7 +86,7 @@ struct PostRowView: View {
 
                     ContentBlocksView(
                         blocks: post.blocks,
-                        textStyle: isMainPost ? .body : .reply,
+                        textStyle: isMainPost ? .mainPost : .reply,
                         lineLimit: ThreadContentDisplayPolicy.detailLineLimit,
                         readerFontSize: readingPreferences.fontSize,
                         readerFontFamily: readingPreferences.fontFamily,
