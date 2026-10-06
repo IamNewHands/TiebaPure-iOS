@@ -140,14 +140,45 @@ struct TiebaImageMetadataClient: Sendable {
     }
 
     func contentLength(from url: URL) async throws -> Int64? {
-        guard let safeURL = TiebaURL.image(url.absoluteString),
-              redirectScope.allows(safeURL) || Self.isSyntheticFixtureURL(safeURL) else { return nil }
+        guard let safeURL = metadataURL(url) else { return nil }
 #if DEBUG
         if TiebaImageSourcePolicy.isSyntheticSuccessURL(safeURL) {
             return Int64(TiebaImageSourcePolicy.syntheticOriginalByteCount)
         }
 #endif
+        guard let response = try await headResponse(for: safeURL) else { return nil }
+        return TiebaImageMetadataPolicy.contentLength(from: response)
+    }
 
+    /// Whether the original file is an animated image.
+    ///
+    /// Tieba keeps the animated bytes of a 动图 at the original tier behind the
+    /// same `.jpg` name the still CDN preview uses, so the URL cannot tell the
+    /// two apart and only the stored file can. The CDN labels that file with its
+    /// real media type, which makes a body-free HEAD the cheapest way to know
+    /// whether downloading the original would buy an animation.
+    func isAnimatedImage(at url: URL) async throws -> Bool {
+        guard let safeURL = metadataURL(url) else { return false }
+#if DEBUG
+        if TiebaImageSourcePolicy.isSyntheticSuccessURL(safeURL) {
+            return false
+        }
+#endif
+        guard let response = try await headResponse(for: safeURL) else { return false }
+        return TiebaImageMetadataPolicy.isAnimatedContentType(
+            response.value(forHTTPHeaderField: "Content-Type")
+        )
+    }
+
+    private func metadataURL(_ url: URL) -> URL? {
+        guard let safeURL = TiebaURL.image(url.absoluteString),
+              redirectScope.allows(safeURL) || Self.isSyntheticFixtureURL(safeURL) else {
+            return nil
+        }
+        return safeURL
+    }
+
+    private func headResponse(for safeURL: URL) async throws -> HTTPURLResponse? {
         var headRequest = TiebaImageRequestPolicy.request(for: safeURL)
         headRequest.httpMethod = "HEAD"
         headRequest.cachePolicy = .reloadIgnoringLocalCacheData
@@ -161,7 +192,7 @@ struct TiebaImageMetadataClient: Sendable {
               (200...299).contains(response.statusCode) else {
             return nil
         }
-        return TiebaImageMetadataPolicy.contentLength(from: response)
+        return response
     }
 
     private static func makeSession() -> URLSession {
@@ -190,6 +221,21 @@ struct TiebaImageMetadataClient: Sendable {
 }
 
 enum TiebaImageMetadataPolicy {
+    /// `image/gif` is what the CDN reports for the stored animated original of a
+    /// Tieba 动图; the still preview tier of the same picture reports
+    /// `image/jpeg`. Parameters after the media type (e.g. `; charset=…`) do not
+    /// change the verdict, and an unknown or missing type stays conservative:
+    /// the caller then keeps the preview it already has.
+    static func isAnimatedContentType(_ rawValue: String?) -> Bool {
+        guard let rawValue else { return false }
+        let mediaType = rawValue
+            .components(separatedBy: ";")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return mediaType == "image/gif"
+    }
+
     static func contentLength(from response: HTTPURLResponse) -> Int64? {
         if let range = response.value(forHTTPHeaderField: "Content-Range") {
             return totalByteCount(fromContentRange: range)

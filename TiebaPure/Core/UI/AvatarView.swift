@@ -125,7 +125,13 @@ enum TiebaImageDecodePolicy {
 }
 
 enum TiebaAnimatedImageDecodePolicy {
-    static let maximumFrameCount = 120
+    /// The decoded-pixel budget below is the memory guard for an animated
+    /// image; this bound only rejects pathological frame counts whose
+    /// per-frame overhead buys no usable animation. A real post 动图 can carry
+    /// a few hundred frames (a 207-frame 240×240 GIF is normal on Tieba), and
+    /// the previous 120-frame ceiling silently downgraded those posts to a
+    /// still first frame even after the animated original had been downloaded.
+    static let maximumFrameCount = 512
     static let maximumDecodedPixels = 24_000_000
     static let defaultFrameDuration = 0.1
     static let minimumFrameDuration = 0.02
@@ -142,6 +148,28 @@ enum TiebaAnimatedImageDecodePolicy {
             ?? defaultFrameDuration
         guard rawDuration.isFinite else { return defaultFrameDuration }
         return min(max(rawDuration, minimumFrameDuration), maximumFrameDuration)
+    }
+}
+
+/// Tieba answers a 动图 with two tiers: the preview tier (`cdnSrc`, the
+/// `w=720;q=60;g=0` CDN style) is a still JPEG re-encode of the first frame,
+/// while the original tier (`originSrc`) keeps the real GIF bytes behind the
+/// same `.jpg` name. The preview stays the right first request — it is about an
+/// order of magnitude smaller and paints immediately — so an inline post image
+/// keeps it and only replaces it once the original is known to be animated.
+enum TiebaAnimatedImageUpgradePolicy {
+    static func shouldProbeOriginal(
+        previewIsAnimated: Bool,
+        previewURL: URL?,
+        originalURL: URL?
+    ) -> Bool {
+        guard previewIsAnimated == false,
+              let previewURL,
+              let originalURL,
+              previewURL != originalURL else {
+            return false
+        }
+        return true
     }
 }
 
@@ -614,12 +642,12 @@ actor TiebaImagePipeline {
               frameCount <= TiebaAnimatedImageDecodePolicy.maximumFrameCount else {
             return nil
         }
-        let options: [CFString: Any] = [
+        let maximumFramePixelSize = TiebaImageDecodePolicy.decodeTargetPixelSize(
+            targetPixelSize
+        )
+        let baseOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: TiebaImageDecodePolicy.decodeTargetPixelSize(
-                targetPixelSize
-            ),
             kCGImageSourceShouldCacheImmediately: true
         ]
         var frames: [UIImage] = []
@@ -635,12 +663,23 @@ actor TiebaImagePipeline {
             ) as? [CFString: Any],
                   let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
                   let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue,
-                  TiebaImageDecodePolicy.allows(width: width, height: height),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(
-                    source,
-                    index,
-                    options as CFDictionary
-                  ) else {
+                  TiebaImageDecodePolicy.allows(width: width, height: height) else {
+                return nil
+            }
+            // A frame is never decoded larger than its own pixel size. Tieba
+            // serves small 动图 (240×240 ones are common) whose frames would
+            // otherwise be scaled up to the display target once per frame,
+            // multiplying the pixel budget by the frame count for no detail.
+            var options = baseOptions
+            options[kCGImageSourceThumbnailMaxPixelSize] = min(
+                maximumFramePixelSize,
+                max(width, height)
+            )
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                index,
+                options as CFDictionary
+            ) else {
                 return nil
             }
             let (framePixels, overflow) = cgImage.width.multipliedReportingOverflow(
@@ -693,6 +732,11 @@ private final class TiebaRemoteImageModel: ObservableObject {
     private var sourceKey = ""
     private var loadID: UUID?
     private var task: Task<UIImage, Error>?
+    /// True while the current source still owes the animated-original download.
+    /// A load cancelled mid-upgrade keeps the still preview, so the next
+    /// appearance has to finish the upgrade instead of returning early and
+    /// leaving the 动图 frozen.
+    private var awaitsAnimatedUpgrade = false
 
     deinit {
         task?.cancel()
@@ -701,18 +745,46 @@ private final class TiebaRemoteImageModel: ObservableObject {
     func load(
         urls: [URL],
         targetPixelSize: Int,
+        prefersAnimatedOriginal: Bool = false,
         force: Bool = false
     ) async {
         let key = Self.sourceKey(urls: urls, targetPixelSize: targetPixelSize)
         let sourceChanged = key != sourceKey
+        if sourceChanged {
+            awaitsAnimatedUpgrade = false
+        }
         let resumesInterruptedLoad: Bool
         if case .loading = phase {
             resumesInterruptedLoad = task == nil
         } else {
             resumesInterruptedLoad = false
         }
-        guard force || sourceChanged || isEmpty || isFailed || resumesInterruptedLoad else { return }
+        let resumesInterruptedUpgrade: Bool
+        if case let .success(image) = phase {
+            resumesInterruptedUpgrade = awaitsAnimatedUpgrade
+                && task == nil
+                && image.images?.isEmpty != false
+        } else {
+            resumesInterruptedUpgrade = false
+        }
+        guard force
+            || sourceChanged
+            || isEmpty
+            || isFailed
+            || resumesInterruptedLoad
+            || resumesInterruptedUpgrade else { return }
         sourceKey = key
+
+        if resumesInterruptedUpgrade, case let .success(image) = phase {
+            await upgradeToAnimatedOriginal(
+                preview: image,
+                urls: urls,
+                targetPixelSize: targetPixelSize,
+                isEnabled: prefersAnimatedOriginal
+            )
+            return
+        }
+
         task?.cancel()
 
         guard urls.isEmpty == false else {
@@ -744,6 +816,12 @@ private final class TiebaRemoteImageModel: ObservableObject {
             task = nil
             loadID = nil
             phase = .success(image)
+            await upgradeToAnimatedOriginal(
+                preview: image,
+                urls: urls,
+                targetPixelSize: targetPixelSize,
+                isEnabled: prefersAnimatedOriginal
+            )
         } catch is CancellationError {
             guard sourceKey == requestKey, loadID == requestID else { return }
             task = nil
@@ -757,6 +835,60 @@ private final class TiebaRemoteImageModel: ObservableObject {
             loadID = nil
             phase = .failure
         }
+    }
+
+    /// Replaces a still preview with the animated original when the CDN reports
+    /// that the original really is an animation. The preview has already been
+    /// published, so this only ever swaps in a better bitmap: a probe that
+    /// fails, a cancelled download, or a still original all leave the preview
+    /// on screen.
+    private func upgradeToAnimatedOriginal(
+        preview: UIImage,
+        urls: [URL],
+        targetPixelSize: Int,
+        isEnabled: Bool
+    ) async {
+        guard isEnabled,
+              let original = urls.dropFirst().first,
+              TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+                  previewIsAnimated: preview.images?.isEmpty == false,
+                  previewURL: urls.first,
+                  originalURL: original
+              ) else {
+            awaitsAnimatedUpgrade = false
+            return
+        }
+
+        let requestKey = sourceKey
+        let requestID = UUID()
+        loadID = requestID
+        awaitsAnimatedUpgrade = true
+
+        // A failed probe is not a verdict, so the flag stays set and a later
+        // appearance retries instead of freezing the preview.
+        guard let isAnimated = try? await TiebaImageMetadataClient.shared.isAnimatedImage(
+            at: original
+        ) else {
+            return
+        }
+        guard isAnimated else {
+            awaitsAnimatedUpgrade = false
+            return
+        }
+
+        guard let animated = try? await TiebaImagePipeline.shared.image(
+            from: [original],
+            targetPixelSize: targetPixelSize
+        ),
+              animated.images?.isEmpty == false,
+              Task.isCancelled == false,
+              sourceKey == requestKey,
+              loadID == requestID else {
+            return
+        }
+        awaitsAnimatedUpgrade = false
+        loadID = nil
+        phase = .success(animated)
     }
 
     func suspendAutomaticLoad(urls: [URL], targetPixelSize: Int) {
@@ -834,6 +966,11 @@ struct TiebaRemoteImage: View {
     var showsRetryButton = true
     var showsResolvedImage = true
     var loadsAutomatically = true
+    /// Opt-in for surfaces that render a post image at reading width. The
+    /// still CDN preview paints first either way; with this on, an image whose
+    /// original is animated is replaced by the animation once the CDN confirms
+    /// it, instead of staying on the flattened first frame.
+    var prefersAnimatedOriginal = false
     var onLoadStateChange: ((TiebaRemoteImageLoadState) -> Void)?
     var onImageResolved: ((UIImage) -> Void)?
     var onImageLayoutResolved: ((UIImage, CGRect) -> Void)?
@@ -851,6 +988,7 @@ struct TiebaRemoteImage: View {
         showsRetryButton: Bool = true,
         showsResolvedImage: Bool = true,
         loadsAutomatically: Bool = true,
+        prefersAnimatedOriginal: Bool = false,
         onLoadStateChange: ((TiebaRemoteImageLoadState) -> Void)? = nil,
         onImageResolved: ((UIImage) -> Void)? = nil,
         onImageLayoutResolved: ((UIImage, CGRect) -> Void)? = nil,
@@ -864,6 +1002,7 @@ struct TiebaRemoteImage: View {
         self.showsRetryButton = showsRetryButton
         self.showsResolvedImage = showsResolvedImage
         self.loadsAutomatically = loadsAutomatically
+        self.prefersAnimatedOriginal = prefersAnimatedOriginal
         self.onLoadStateChange = onLoadStateChange
         self.onImageResolved = onImageResolved
         self.onImageLayoutResolved = onImageLayoutResolved
@@ -931,6 +1070,7 @@ struct TiebaRemoteImage: View {
                             await model.load(
                                 urls: urls,
                                 targetPixelSize: targetPixelSize,
+                                prefersAnimatedOriginal: prefersAnimatedOriginal,
                                 force: true
                             )
                         }
@@ -954,6 +1094,7 @@ struct TiebaRemoteImage: View {
             await model.load(
                 urls: urls,
                 targetPixelSize: targetPixelSize,
+                prefersAnimatedOriginal: prefersAnimatedOriginal,
                 force: retryTrigger > 0
             )
         }

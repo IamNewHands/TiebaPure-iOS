@@ -1404,6 +1404,84 @@ final class TiebaPureSmokeTests: XCTestCase {
         )
     }
 
+    func testTiebaImagePipelineDecodesAnimatedGIFBeyondTheLegacyFrameCap() throws {
+        // A real post 动图 (thread 11074744508) carries 207 frames. The old
+        // 120-frame ceiling rejected it and silently returned the still first
+        // frame, so a 动图 stayed frozen even after its animated original had
+        // been downloaded.
+        let frameCount = 207
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(
+            data,
+            "com.compuserve.gif" as CFString,
+            frameCount,
+            nil
+        ))
+        for index in 0..<frameCount {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image {
+                (index.isMultiple(of: 2) ? UIColor.systemBlue : UIColor.systemOrange).setFill()
+                $0.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            }
+            CGImageDestinationAddImage(
+                destination,
+                try XCTUnwrap(image.cgImage),
+                [
+                    kCGImagePropertyGIFDictionary: [
+                        kCGImagePropertyGIFDelayTime: 0.05
+                    ]
+                ] as CFDictionary
+            )
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+
+        let image = try XCTUnwrap(TiebaImagePipeline.decodedImage(
+            from: data as Data,
+            targetPixelSize: 128
+        ))
+        XCTAssertEqual(image.images?.count, frameCount)
+        XCTAssertGreaterThan(image.duration, 0)
+        let expectedCost = try XCTUnwrap(image.images).reduce(into: 0) { total, frame in
+            let cgImage = try XCTUnwrap(frame.cgImage)
+            total += cgImage.width * cgImage.height * 4
+        }
+        XCTAssertEqual(TiebaImagePipeline.decodedImageCost(image), expectedCost)
+    }
+
+    func testAnimatedImageUpgradePolicyProbesOnlyADistinctStillPreview() throws {
+        let preview = try XCTUnwrap(URL(
+            string: "https://tiebapic.baidu.com/forum/w%3D720%3Bq%3D60%3Bg%3D0/sign=a/abc.jpg"
+        ))
+        let original = try XCTUnwrap(URL(
+            string: "https://tiebapic.baidu.com/forum/pic/item/abc.jpg"
+        ))
+
+        XCTAssertTrue(TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+            previewIsAnimated: false,
+            previewURL: preview,
+            originalURL: original
+        ))
+        XCTAssertFalse(TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+            previewIsAnimated: true,
+            previewURL: preview,
+            originalURL: original
+        ))
+        XCTAssertFalse(TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+            previewIsAnimated: false,
+            previewURL: preview,
+            originalURL: preview
+        ))
+        XCTAssertFalse(TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+            previewIsAnimated: false,
+            previewURL: preview,
+            originalURL: nil
+        ))
+        XCTAssertFalse(TiebaAnimatedImageUpgradePolicy.shouldProbeOriginal(
+            previewIsAnimated: false,
+            previewURL: nil,
+            originalURL: original
+        ))
+    }
+
     func testTiebaImageSourcePolicyKeepsThumbnailThenOriginalWithoutDuplicates() throws {
         let thumbnail = try XCTUnwrap(URL(string: "https://tiebapic.baidu.com/thumb.jpg"))
         let original = try XCTUnwrap(URL(string: "https://tiebapic.baidu.com/original.jpg"))
@@ -1951,6 +2029,17 @@ final class TiebaPureSmokeTests: XCTestCase {
             ]
         ))
         XCTAssertNil(TiebaImageMetadataPolicy.contentLength(from: unknownPartial))
+    }
+
+    func testImageMetadataDetectsTheAnimatedContentType() {
+        XCTAssertTrue(TiebaImageMetadataPolicy.isAnimatedContentType("image/gif"))
+        XCTAssertTrue(TiebaImageMetadataPolicy.isAnimatedContentType("IMAGE/GIF"))
+        XCTAssertTrue(TiebaImageMetadataPolicy.isAnimatedContentType("image/gif; charset=binary"))
+        XCTAssertFalse(TiebaImageMetadataPolicy.isAnimatedContentType("image/jpeg"))
+        XCTAssertFalse(TiebaImageMetadataPolicy.isAnimatedContentType("image/png"))
+        XCTAssertFalse(TiebaImageMetadataPolicy.isAnimatedContentType("image/webp"))
+        XCTAssertFalse(TiebaImageMetadataPolicy.isAnimatedContentType(""))
+        XCTAssertFalse(TiebaImageMetadataPolicy.isAnimatedContentType(nil))
     }
 
     func testFullScreenImageZoomPolicyClampsAndTogglesAtStableScales() {

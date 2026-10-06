@@ -283,6 +283,27 @@ final class SecurityRegressionTests: XCTestCase {
         XCTAssertNil(SecurityURLProtocol.lastRangeHeader)
     }
 
+    func testAnimatedImageProbeReadsTheContentTypeFromABodyFreeHead() async throws {
+        SecurityURLProtocol.payload = Data()
+        SecurityURLProtocol.mimeType = "image/gif"
+        SecurityURLProtocol.declaredContentLength = 3_670_016
+        let client = TiebaImageMetadataClient(
+            session: Self.session(),
+            redirectScope: .publicHTTPS
+        )
+        let url = try XCTUnwrap(URL(string: "https://example.com/original.jpg"))
+
+        let animated = try await client.isAnimatedImage(at: url)
+
+        XCTAssertTrue(animated)
+        XCTAssertEqual(SecurityURLProtocol.lastRequestMethod, "HEAD")
+        XCTAssertNil(SecurityURLProtocol.lastRangeHeader)
+
+        SecurityURLProtocol.mimeType = "image/jpeg"
+        let still = try await client.isAnimatedImage(at: url)
+        XCTAssertFalse(still)
+    }
+
     func testImageDecodePolicyRejectsPixelBombDimensions() {
         XCTAssertTrue(TiebaImageDecodePolicy.allows(width: 4_096, height: 4_096))
         XCTAssertEqual(TiebaImageDecodePolicy.maximumPreviewDecodedPixelSize, 2_560)

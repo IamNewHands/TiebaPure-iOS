@@ -132,6 +132,10 @@ struct ImageViewer: View {
                     showsRetryButton: false,
                     showsResolvedImage: false,
                     loadsAutomatically: isManualLoadAuthorized,
+                    // Tieba's preview tier flattens a 动图 to a still first
+                    // frame, so the reading surface has to ask for the animated
+                    // original once the preview is on screen.
+                    prefersAnimatedOriginal: true,
                     onLoadStateChange: {
                         inlineLoadState = $0
                         if $0 != .success {
