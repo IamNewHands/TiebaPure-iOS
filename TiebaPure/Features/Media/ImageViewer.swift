@@ -584,14 +584,17 @@ final class ImagePreviewSourceAnchor: ObservableObject {
             self.image = image
         }
         if view?.image !== image {
-            view?.image = image
+            // Playback is reconciled against the shared animated-image budget
+            // inside the governed view; a 动图-heavy row otherwise starts every
+            // animation the moment its bitmap lands.
+            view?.setGovernedImage(image)
         }
     }
 
     func clearImage(sourceIdentity: String) {
         guard self.sourceIdentity == sourceIdentity else { return }
         image = nil
-        view?.image = nil
+        view?.setGovernedImage(nil)
     }
 
     func prepareForReuse(sourceIdentity: String) {
@@ -617,11 +620,11 @@ final class ImagePreviewSourceAnchor: ObservableObject {
     func attach(_ view: ImagePreviewSourceView, sourceIdentity: String) {
         bind(to: sourceIdentity)
         if self.view !== view {
-            self.view?.image = nil
+            self.view?.setGovernedImage(nil)
             self.view = view
         }
         if view.image !== image {
-            view.image = image
+            view.setGovernedImage(image)
         }
     }
 
@@ -659,7 +662,7 @@ final class ImagePreviewSourceAnchor: ObservableObject {
 
     private func bind(to identity: String) {
         guard sourceIdentity != identity else { return }
-        view?.image = nil
+        view?.setGovernedImage(nil)
         view = nil
         image = nil
         sourceIdentity = identity
@@ -806,7 +809,7 @@ struct ImagePreviewSourceAnchorReader: UIViewRepresentable {
 }
 
 @MainActor
-final class ImagePreviewSourceView: UIImageView {
+final class ImagePreviewSourceView: TiebaGovernedAnimatedImageView {
     var onTransitionTap: (() -> Void)?
 
     var canActivateDuringTransition: Bool {

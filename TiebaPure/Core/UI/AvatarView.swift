@@ -697,25 +697,206 @@ actor TiebaImagePipeline {
     }
 }
 
+/// One 动图-heavy post can put a dozen animated image views in the tree at
+/// once (the reader's main post is a single non-lazy row, so every inline
+/// image enters the hierarchy together). Each animating UIImageView commits
+/// a bitmap per frame, so N simultaneous animations means N commits per tick
+/// plus a decoded-frame footprint that evicts the image cache in waves. The
+/// governor bounds live animations so the reading surface stays interactive
+/// no matter how many 动图 finish loading.
+@MainActor
+enum TiebaAnimatedImagePlaybackGovernor {
+    /// The most animations allowed to run at the same time. Two keeps a
+    /// visible image animating while its neighbor finishes an upgrade without
+    /// re-creating the exact saturation this governor exists to prevent.
+    static let maximumConcurrentAnimations = 2
+
+    private static var animatingViews: Set<ObjectIdentifier> = []
+    /// Views that want a slot but found the budget exhausted. Weakly held: a
+    /// dismantled view drops out on the next admission pass. When a slot
+    /// frees up, the oldest live waiter retries first.
+    private static var waitingViews: [(view: WeakImageViewBox, token: ObjectIdentifier)] = []
+
+    static func slotsAvailable() -> Bool {
+        animatingViews.count < maximumConcurrentAnimations
+    }
+
+    /// Claims a playback slot for a view. Returns false when the budget is
+    /// exhausted; the view is queued for a retry that fires as soon as any
+    /// slot is relinquished.
+    static func claimSlot(for view: UIImageView) -> Bool {
+        let token = ObjectIdentifier(view)
+        if animatingViews.contains(token) { return true }
+        guard animatingViews.count < maximumConcurrentAnimations else {
+            enqueueWaiter(view, token: token)
+            return false
+        }
+        animatingViews.insert(token)
+        return true
+    }
+
+    static func relinquishSlot(for view: UIImageView) {
+        let token = ObjectIdentifier(view)
+        animatingViews.remove(token)
+        waitingViews.removeAll { $0.token == token }
+        admitOldestWaiter()
+    }
+
+    /// Test hook: drop all state so a unit test cannot leak slots into the
+    /// next case.
+    static func drainForTesting() {
+        animatingViews.removeAll()
+        waitingViews.removeAll()
+    }
+
+    private static func enqueueWaiter(_ view: UIImageView, token: ObjectIdentifier) {
+        guard waitingViews.contains(where: { $0.token == token }) == false else { return }
+        waitingViews.append((WeakImageViewBox(view), token))
+    }
+
+    private static func admitOldestWaiter() {
+        waitingViews.removeAll { $0.view.view == nil }
+        while slotsAvailable(), let oldest = waitingViews.first {
+            guard let view = oldest.view.view, view.window != nil else {
+                waitingViews.removeFirst()
+                continue
+            }
+            waitingViews.removeFirst()
+            let token = oldest.token
+            animatingViews.insert(token)
+            view.startAnimating()
+        }
+    }
+}
+
+/// Weak box so the playback governor never keeps a dismantled image view
+/// alive; slots are handed back in `dismantleUIView` regardless.
+@MainActor
+private final class WeakImageViewBox {
+    weak var view: UIImageView?
+
+    init(_ view: UIImageView) {
+        self.view = view
+    }
+}
+
+/// The one governed animated image view. Assigning an animated `UIImage` to
+/// `UIImageView.image` starts playback implicitly, which is how a reader row
+/// full of 动图 ends up animating every one of them at once. Playback goes
+/// through `setGovernedImage` so the governor can bound how many views are
+/// animating no matter which surface owns the bitmap. `image` is not
+/// overridden: UIKit declares it as a stored ObjC property, and a Swift
+/// subclass cannot add observers to it.
+@MainActor
+class TiebaGovernedAnimatedImageView: UIImageView {
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        syncAnimationPlayback()
+    }
+
+    /// Assigns the bitmap and reconciles playback with the shared budget.
+    func setGovernedImage(_ newImage: UIImage?) {
+        image = newImage
+        syncAnimationPlayback()
+    }
+
+    func syncAnimationPlayback() {
+        guard (image?.images?.count ?? 0) > 1 else {
+            stopAnimating()
+            TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: self)
+            return
+        }
+        // Off-window views are not rendered, so they must not consume a slot;
+        // they re-enter the budget from `didMoveToWindow`. Playback state is
+        // left to UIKit here so a view that never joins a window behaves
+        // exactly as it did before this governor existed.
+        guard window != nil else {
+            TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: self)
+            return
+        }
+        if TiebaAnimatedImagePlaybackGovernor.claimSlot(for: self) {
+            startAnimating()
+        } else {
+            // Budget exhausted: keep the first frame still and wait in the
+            // governor's queue for the next released slot.
+            stopAnimating()
+        }
+    }
+}
+
 private struct TiebaAnimatedUIImageView: UIViewRepresentable {
     let image: UIImage
     let contentMode: ContentMode
 
-    func makeUIView(context: Context) -> UIImageView {
-        let imageView = UIImageView()
+    func makeUIView(context: Context) -> TiebaGovernedAnimatedImageView {
+        let imageView = TiebaGovernedAnimatedImageView()
         imageView.clipsToBounds = true
         return imageView
     }
 
-    func updateUIView(_ imageView: UIImageView, context: Context) {
+    func updateUIView(_ imageView: TiebaGovernedAnimatedImageView, context: Context) {
         imageView.contentMode = contentMode == .fill ? .scaleAspectFill : .scaleAspectFit
-        imageView.image = image
-        imageView.startAnimating()
+        // Assignment drives playback through the governor, which admits at
+        // most `maximumConcurrentAnimations` views at a time.
+        imageView.setGovernedImage(image)
     }
 
-    static func dismantleUIView(_ imageView: UIImageView, coordinator: Void) {
+    static func dismantleUIView(_ imageView: TiebaGovernedAnimatedImageView, coordinator: Void) {
         imageView.stopAnimating()
         imageView.image = nil
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: imageView)
+    }
+}
+
+/// Gate for the 动图 upgrade network path. A post whose main floor carries a
+/// dozen 动图 upgrades them all at once, and each upgrade downloads the full
+/// multi-megabyte GIF original; five of those racing saturate the link and
+/// starve every other image request on the page. The gate admits a bounded
+/// number of concurrent upgrades and queues the rest; the queue is ordered so
+/// the first inline image still animates first.
+@MainActor
+enum TiebaAnimatedUpgradeAdmissionPolicy {
+    /// Concurrent 动图-original downloads allowed across the whole app.
+    static let maximumConcurrentUpgrades = 2
+
+    private static var activeCount = 0
+    private static var waiters: [(id: UUID, resume: CheckedContinuation<Void, Never>)] = []
+
+    static func activeUpgradeCountForTesting() -> Int { activeCount }
+
+    static func slotsAvailable() -> Bool {
+        activeCount < maximumConcurrentUpgrades
+    }
+
+    static func admit(id: UUID) async {
+        guard activeCount < maximumConcurrentUpgrades else {
+            await withCheckedContinuation { continuation in
+                waiters.append((id, continuation))
+            }
+            return
+        }
+        activeCount += 1
+    }
+
+    static func release(id: UUID) {
+        guard activeCount > 0 else { return }
+        activeCount -= 1
+        while activeCount < maximumConcurrentUpgrades,
+              let oldest = waiters.first {
+            waiters.removeFirst()
+            activeCount += 1
+            oldest.resume.resume()
+        }
+        // A cancelled waiter still resumes through release(); no purge hook is
+        // needed because admission is never re-checked after resume — the
+        // cancelled task drops out at its own guard.
+    }
+
+    static func drainForTesting() {
+        activeCount = 0
+        let pending = waiters
+        waiters = []
+        pending.forEach { $0.resume.resume() }
     }
 }
 
@@ -876,10 +1057,30 @@ private final class TiebaRemoteImageModel: ObservableObject {
             return
         }
 
-        guard let animated = try? await TiebaImagePipeline.shared.image(
-            from: [original],
-            targetPixelSize: targetPixelSize
-        ),
+        // Heavy 动图 originals (multi-megabyte GIFs) race every other image
+        // request when a post upgrades several of them at once. Bound the
+        // concurrent originals app-wide and release the slot on every exit.
+        let admissionID = UUID()
+        await TiebaAnimatedUpgradeAdmissionPolicy.admit(id: admissionID)
+        guard Task.isCancelled == false,
+              sourceKey == requestKey,
+              loadID == requestID else {
+            TiebaAnimatedUpgradeAdmissionPolicy.release(id: admissionID)
+            return
+        }
+
+        let upgraded: UIImage?
+        do {
+            upgraded = try await TiebaImagePipeline.shared.image(
+                from: [original],
+                targetPixelSize: targetPixelSize
+            )
+        } catch {
+            upgraded = nil
+        }
+        TiebaAnimatedUpgradeAdmissionPolicy.release(id: admissionID)
+
+        guard let animated = upgraded,
               animated.images?.isEmpty == false,
               Task.isCancelled == false,
               sourceKey == requestKey,

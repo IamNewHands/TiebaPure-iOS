@@ -1482,6 +1482,76 @@ final class TiebaPureSmokeTests: XCTestCase {
         ))
     }
 
+    @MainActor
+    func testAnimatedPlaybackGovernorBoundsConcurrentAnimations() {
+        TiebaAnimatedImagePlaybackGovernor.drainForTesting()
+        defer { TiebaAnimatedImagePlaybackGovernor.drainForTesting() }
+
+        let first = UIImageView()
+        let second = UIImageView()
+        let third = UIImageView()
+
+        // A fresh governor admits views up to the budget.
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: first))
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: second))
+        XCTAssertFalse(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: third))
+        XCTAssertFalse(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+
+        // Re-claiming an admitted view is idempotent and does not consume
+        // another slot.
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: first))
+
+        // Releasing a slot lets the queued view in on the same pass only via
+        // relinquish; the waiter list stays bounded to live windows because
+        // this test view has no window, so admission drops it instead.
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: first)
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: second)
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: third)
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+    }
+
+    @MainActor
+    func testAnimatedUpgradeAdmissionPolicyBoundsConcurrentOriginalDownloads() async {
+        TiebaAnimatedUpgradeAdmissionPolicy.drainForTesting()
+        defer { TiebaAnimatedUpgradeAdmissionPolicy.drainForTesting() }
+
+        let firstID = UUID()
+        let secondID = UUID()
+        let thirdID = UUID()
+
+        await TiebaAnimatedUpgradeAdmissionPolicy.admit(id: firstID)
+        await TiebaAnimatedUpgradeAdmissionPolicy.admit(id: secondID)
+        XCTAssertEqual(
+            TiebaAnimatedUpgradeAdmissionPolicy.activeUpgradeCountForTesting(),
+            TiebaAnimatedUpgradeAdmissionPolicy.maximumConcurrentUpgrades
+        )
+
+        // The third admission queues instead of running; it must not raise
+        // the active count beyond the budget.
+        let queued = Task {
+            await TiebaAnimatedUpgradeAdmissionPolicy.admit(id: thirdID)
+        }
+        await Task.yield()
+        XCTAssertEqual(
+            TiebaAnimatedUpgradeAdmissionPolicy.activeUpgradeCountForTesting(),
+            TiebaAnimatedUpgradeAdmissionPolicy.maximumConcurrentUpgrades
+        )
+
+        // Releasing one active slot admits the queued waiter.
+        TiebaAnimatedUpgradeAdmissionPolicy.release(id: secondID)
+        await queued.value
+        XCTAssertEqual(
+            TiebaAnimatedUpgradeAdmissionPolicy.activeUpgradeCountForTesting(),
+            TiebaAnimatedUpgradeAdmissionPolicy.maximumConcurrentUpgrades
+        )
+
+        TiebaAnimatedUpgradeAdmissionPolicy.release(id: thirdID)
+        TiebaAnimatedUpgradeAdmissionPolicy.release(id: firstID)
+        XCTAssertEqual(TiebaAnimatedUpgradeAdmissionPolicy.activeUpgradeCountForTesting(), 0)
+    }
+
     func testTiebaImageSourcePolicyKeepsThumbnailThenOriginalWithoutDuplicates() throws {
         let thumbnail = try XCTUnwrap(URL(string: "https://tiebapic.baidu.com/thumb.jpg"))
         let original = try XCTUnwrap(URL(string: "https://tiebapic.baidu.com/original.jpg"))
