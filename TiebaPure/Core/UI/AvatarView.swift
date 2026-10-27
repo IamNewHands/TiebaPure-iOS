@@ -697,6 +697,30 @@ actor TiebaImagePipeline {
     }
 }
 
+/// Surfaces that hold an animation budget. A full-screen viewer covers the
+/// reading surface, so its animation outranks the rows it hides: those rows are
+/// not visible, and their frame traffic is exactly what the full-screen bitmap
+/// needs the budget for.
+enum TiebaAnimatedPlaybackPriority: Equatable {
+    case inline
+    case foreground
+}
+
+/// A surface that only exists for a moment — the 0.32s hero proxy or the
+/// full-screen placeholder that waits for the real bitmap — never needs
+/// playback. Assigning a multi-frame `UIImage` to a plain `UIImageView` starts
+/// that playback implicitly, which is why opening a 动图 full screen used to
+/// animate the same 60-frame bitmap twice (proxy + placeholder) on top of the
+/// rows behind it, and the app stopped responding.
+enum TiebaAnimatedImageStillFramePolicy {
+    static func still(_ image: UIImage?) -> UIImage? {
+        guard let image, let frames = image.images, frames.isEmpty == false else {
+            return image
+        }
+        return frames[0]
+    }
+}
+
 /// One 动图-heavy post can put a dozen animated image views in the tree at
 /// once (the reader's main post is a single non-lazy row, so every inline
 /// image enters the hierarchy together). Each animating UIImageView commits
@@ -710,60 +734,150 @@ enum TiebaAnimatedImagePlaybackGovernor {
     /// visible image animating while its neighbor finishes an upgrade without
     /// re-creating the exact saturation this governor exists to prevent.
     static let maximumConcurrentAnimations = 2
+    /// The full-screen viewer keeps the visible page and its immediate
+    /// neighbor resident, so it gets the same depth as the reading surface.
+    static let maximumConcurrentForegroundAnimations = 2
 
-    private static var animatingViews: Set<ObjectIdentifier> = []
+    private struct ActivePlayback {
+        let priority: TiebaAnimatedPlaybackPriority
+        let view: WeakImageViewBox
+    }
+
+    private static var activePlaybacks: [ObjectIdentifier: ActivePlayback] = [:]
     /// Views that want a slot but found the budget exhausted. Weakly held: a
     /// dismantled view drops out on the next admission pass. When a slot
     /// frees up, the oldest live waiter retries first.
-    private static var waitingViews: [(view: WeakImageViewBox, token: ObjectIdentifier)] = []
+    private static var waitingViews: [
+        (view: WeakImageViewBox, token: ObjectIdentifier, priority: TiebaAnimatedPlaybackPriority)
+    ] = []
 
+    private static var inlinePlaybackCount: Int {
+        activePlaybacks.values.filter { $0.priority == .inline }.count
+    }
+
+    private static var foregroundPlaybackCount: Int {
+        activePlaybacks.values.filter { $0.priority == .foreground }.count
+    }
+
+    /// True when the reading surface may start another animation right now.
     static func slotsAvailable() -> Bool {
-        animatingViews.count < maximumConcurrentAnimations
+        foregroundPlaybackCount == 0
+            && inlinePlaybackCount < maximumConcurrentAnimations
     }
 
     /// Claims a playback slot for a view. Returns false when the budget is
     /// exhausted; the view is queued for a retry that fires as soon as any
     /// slot is relinquished.
-    static func claimSlot(for view: UIImageView) -> Bool {
+    ///
+    /// A `.foreground` claim first suspends every inline animation: those rows
+    /// sit behind the full-screen viewer, so their playback is invisible work
+    /// that also competes for the decoded-frame memory the full-screen bitmap
+    /// needs. The suspended rows re-enter the budget when the viewer releases
+    /// its slots.
+    @discardableResult
+    static func claimSlot(
+        for view: UIImageView,
+        priority: TiebaAnimatedPlaybackPriority = .inline
+    ) -> Bool {
         let token = ObjectIdentifier(view)
-        if animatingViews.contains(token) { return true }
-        guard animatingViews.count < maximumConcurrentAnimations else {
-            enqueueWaiter(view, token: token)
-            return false
+        if activePlaybacks[token] != nil {
+            activePlaybacks[token] = ActivePlayback(
+                priority: priority,
+                view: WeakImageViewBox(view)
+            )
+            return true
         }
-        animatingViews.insert(token)
+        switch priority {
+        case .foreground:
+            suspendInlinePlayback()
+            guard foregroundPlaybackCount < maximumConcurrentForegroundAnimations else {
+                enqueueWaiter(view, token: token, priority: priority)
+                return false
+            }
+        case .inline:
+            guard foregroundPlaybackCount == 0,
+                  inlinePlaybackCount < maximumConcurrentAnimations else {
+                enqueueWaiter(view, token: token, priority: priority)
+                return false
+            }
+        }
+        activePlaybacks[token] = ActivePlayback(
+            priority: priority,
+            view: WeakImageViewBox(view)
+        )
         return true
     }
 
     static func relinquishSlot(for view: UIImageView) {
         let token = ObjectIdentifier(view)
-        animatingViews.remove(token)
+        activePlaybacks.removeValue(forKey: token)
         waitingViews.removeAll { $0.token == token }
-        admitOldestWaiter()
+        admitWaiters()
     }
 
     /// Test hook: drop all state so a unit test cannot leak slots into the
     /// next case.
     static func drainForTesting() {
-        animatingViews.removeAll()
+        activePlaybacks.removeAll()
         waitingViews.removeAll()
     }
 
-    private static func enqueueWaiter(_ view: UIImageView, token: ObjectIdentifier) {
-        guard waitingViews.contains(where: { $0.token == token }) == false else { return }
-        waitingViews.append((WeakImageViewBox(view), token))
-    }
-
-    private static func admitOldestWaiter() {
-        waitingViews.removeAll { $0.view.view == nil }
-        while slotsAvailable(), let oldest = waitingViews.first {
-            guard let view = oldest.view.view, view.window != nil else {
-                waitingViews.removeFirst()
+    private static func suspendInlinePlayback() {
+        let inlineTokens = activePlaybacks.compactMap { token, playback in
+            playback.priority == .inline ? token : nil
+        }
+        for token in inlineTokens {
+            guard let playback = activePlaybacks.removeValue(forKey: token),
+                  let view = playback.view.view else {
                 continue
             }
-            waitingViews.removeFirst()
-            let token = oldest.token
-            animatingViews.insert(token)
+            view.stopAnimating()
+            enqueueWaiter(view, token: token, priority: .inline)
+        }
+    }
+
+    private static func enqueueWaiter(
+        _ view: UIImageView,
+        token: ObjectIdentifier,
+        priority: TiebaAnimatedPlaybackPriority
+    ) {
+        guard waitingViews.contains(where: { $0.token == token }) == false else { return }
+        waitingViews.append((WeakImageViewBox(view), token, priority))
+    }
+
+    private static func admitWaiters() {
+        waitingViews.removeAll { $0.view.view == nil }
+        admit(
+            priority: .foreground,
+            budget: maximumConcurrentForegroundAnimations - foregroundPlaybackCount
+        )
+        // Inline playback stays parked while a full-screen surface owns the
+        // budget; it resumes when the last foreground view releases.
+        if foregroundPlaybackCount == 0 {
+            admit(
+                priority: .inline,
+                budget: maximumConcurrentAnimations - inlinePlaybackCount
+            )
+        }
+    }
+
+    private static func admit(priority: TiebaAnimatedPlaybackPriority, budget: Int) {
+        guard budget > 0 else { return }
+        var remaining = budget
+        var index = 0
+        while index < waitingViews.count, remaining > 0 {
+            let waiter = waitingViews[index]
+            guard waiter.priority == priority else {
+                index += 1
+                continue
+            }
+            waitingViews.remove(at: index)
+            guard let view = waiter.view.view, view.window != nil else { continue }
+            activePlaybacks[waiter.token] = ActivePlayback(
+                priority: priority,
+                view: waiter.view
+            )
+            remaining -= 1
             view.startAnimating()
         }
     }
@@ -789,6 +903,11 @@ private final class WeakImageViewBox {
 /// subclass cannot add observers to it.
 @MainActor
 class TiebaGovernedAnimatedImageView: UIImageView {
+    /// Which surface this view speaks for when it asks the governor for a
+    /// slot. The full-screen viewer sets `.foreground` so its bitmap animates
+    /// even while the reading surface behind it is still holding budget.
+    var playbackPriority: TiebaAnimatedPlaybackPriority = .inline
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
         syncAnimationPlayback()
@@ -814,7 +933,10 @@ class TiebaGovernedAnimatedImageView: UIImageView {
             TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: self)
             return
         }
-        if TiebaAnimatedImagePlaybackGovernor.claimSlot(for: self) {
+        if TiebaAnimatedImagePlaybackGovernor.claimSlot(
+            for: self,
+            priority: playbackPriority
+        ) {
             startAnimating()
         } else {
             // Budget exhausted: keep the first frame still and wait in the

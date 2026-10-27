@@ -1513,6 +1513,70 @@ final class TiebaPureSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testForegroundPlaybackSuspendsInlineAnimationsAndRestoresThem() {
+        TiebaAnimatedImagePlaybackGovernor.drainForTesting()
+        defer { TiebaAnimatedImagePlaybackGovernor.drainForTesting() }
+
+        let first = UIImageView()
+        let second = UIImageView()
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: first))
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: second))
+        XCTAssertFalse(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+
+        // Opening the full-screen viewer suspends the rows behind it: their
+        // playback is invisible and must not keep competing for the budget the
+        // full-screen bitmap needs.
+        let viewerPage = UIImageView()
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(
+            for: viewerPage,
+            priority: .foreground
+        ))
+        XCTAssertFalse(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+        XCTAssertFalse(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: UIImageView()))
+
+        // The resident neighbor page still animates: the viewer's budget is
+        // independent of the reading surface's.
+        let neighborPage = UIImageView()
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(
+            for: neighborPage,
+            priority: .foreground
+        ))
+
+        // Closing the viewer hands the budget back to the reading surface.
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: viewerPage)
+        TiebaAnimatedImagePlaybackGovernor.relinquishSlot(for: neighborPage)
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.slotsAvailable())
+        XCTAssertTrue(TiebaAnimatedImagePlaybackGovernor.claimSlot(for: UIImageView()))
+    }
+
+    @MainActor
+    func testAnimatedStillFramePolicyDropsPlaybackForTransientSurfaces() {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2))
+        let frameA = renderer.image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        let frameB = renderer.image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        let animated = UIImage.animatedImage(with: [frameA, frameB], duration: 0.2)
+        XCTAssertEqual(animated?.images?.count, 2)
+
+        // A still bitmap and a missing bitmap pass through untouched.
+        XCTAssertNil(TiebaAnimatedImageStillFramePolicy.still(nil))
+        XCTAssertTrue(TiebaAnimatedImageStillFramePolicy.still(frameA) === frameA)
+
+        // The flattened bitmap keeps the first frame's geometry but has no
+        // frames left, so assigning it to a plain UIImageView cannot start an
+        // implicit animation.
+        let flattened = TiebaAnimatedImageStillFramePolicy.still(animated)
+        XCTAssertNotNil(flattened)
+        XCTAssertEqual(flattened?.size, frameA.size)
+        XCTAssertNil(flattened?.images)
+    }
+
+    @MainActor
     func testAnimatedUpgradeAdmissionPolicyBoundsConcurrentOriginalDownloads() async {
         TiebaAnimatedUpgradeAdmissionPolicy.drainForTesting()
         defer { TiebaAnimatedUpgradeAdmissionPolicy.drainForTesting() }

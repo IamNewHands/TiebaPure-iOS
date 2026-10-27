@@ -1584,7 +1584,10 @@ final class ImagePreviewHeroProxyView: UIView {
         isUserInteractionEnabled = false
         accessibilityElementsHidden = true
 
-        imageView.image = image
+        // The proxy only lives for the 0.32s morph, so it shows the first frame
+        // of a 动图 instead of starting a second, ungoverned playback of the
+        // same multi-megabyte frame set the row is already holding.
+        imageView.image = TiebaAnimatedImageStillFramePolicy.still(image)
         // The outer frame and the normalized center crop are animated together
         // by the hero animator. `scaleToFill` is intentional here:
         // `contentsRect` already has the exact aspect ratio of the frame, so
@@ -2711,7 +2714,12 @@ private final class FullScreenZoomImageController: UIViewController,
     private let scrollView = UIScrollView()
     private let zoomContentView = UIView()
     private let placeholderImageView = UIImageView()
-    private let resolvedImageView = UIImageView()
+    /// Playback of the full-screen bitmap goes through the shared governor with
+    /// `.foreground` priority: a 60-frame 动图 decoded at screen size commits a
+    /// bitmap per frame, and letting a plain `UIImageView` start that playback
+    /// on top of the rows behind the viewer is what made opening a 动图 full
+    /// screen freeze the app.
+    private let resolvedImageView = TiebaGovernedAnimatedImageView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
     private let retryButton = UIButton(type: .system)
     private let zoomDiagnosticsProxy = UIView()
@@ -2880,7 +2888,10 @@ private final class FullScreenZoomImageController: UIViewController,
         zoomContentView.clipsToBounds = false
         scrollView.addSubview(zoomContentView)
 
-        placeholderImageView.image = placeholderImage
+        // The reused row bitmap is a preview, not the thing being presented:
+        // keep it on its first frame so the placeholder never runs an
+        // ungoverned animation of the whole 动图 behind the hero.
+        placeholderImageView.image = TiebaAnimatedImageStillFramePolicy.still(placeholderImage)
         // Match the resolved image view exactly (aspect-fit, full bounds).
         // A .scaleAspectFill placeholder in an aspect-fit frame renders the
         // image at a different scale than the resolved .scaleAspectFit view,
@@ -2893,6 +2904,7 @@ private final class FullScreenZoomImageController: UIViewController,
         placeholderImageView.isHidden = placeholderImage == nil
         zoomContentView.addSubview(placeholderImageView)
 
+        resolvedImageView.playbackPriority = .foreground
         resolvedImageView.contentMode = .scaleAspectFit
         resolvedImageView.clipsToBounds = true
         resolvedImageView.backgroundColor = .clear
@@ -3094,6 +3106,10 @@ private final class FullScreenZoomImageController: UIViewController,
         metadataTask?.cancel()
         metadataTask = nil
         latestOriginalProgress = nil
+        // Hand the playback slot back before the controller leaves the
+        // hierarchy; the reading surface resumes as soon as the last
+        // full-screen view releases.
+        resolvedImageView.setGovernedImage(nil)
         presentationCancellable?.cancel()
         presentationCancellable = nil
         currentIndexCancellable?.cancel()
@@ -3229,7 +3245,7 @@ private final class FullScreenZoomImageController: UIViewController,
         resolvedImage = nil
         transitionImage = nil
         didResolveAutomaticPreview = false
-        resolvedImageView.image = nil
+        resolvedImageView.setGovernedImage(nil)
         didRevealResolvedImage = false
         resolvedImageView.alpha = 0
         placeholderImageView.alpha = placeholderImage == nil ? 0 : 1
@@ -3312,7 +3328,7 @@ private final class FullScreenZoomImageController: UIViewController,
                 // and let the presentation sink commit it in the completion
                 // transaction.
                 if loadedAfterPresentation {
-                    self.resolvedImageView.image = image
+                    self.resolvedImageView.setGovernedImage(image)
                 }
                 self.updateResolvedImageVisibility(animated:
                     ImagePreviewResolvedImageVisibilityPolicy.animatesResolvedReveal(
@@ -3334,7 +3350,7 @@ private final class FullScreenZoomImageController: UIViewController,
 
     private func commitStashedResolvedImage() {
         guard let resolvedImage, resolvedImageView.image !== resolvedImage else { return }
-        resolvedImageView.image = resolvedImage
+        resolvedImageView.setGovernedImage(resolvedImage)
     }
 
     private func startOriginalImageLoading() {
@@ -3439,7 +3455,7 @@ private final class FullScreenZoomImageController: UIViewController,
     private func revealOriginalImage(_ image: UIImage) {
         let changes = { [weak self] in
             guard let self else { return }
-            self.resolvedImageView.image = image
+            self.resolvedImageView.setGovernedImage(image)
             self.resolvedImageView.alpha = 1
             self.placeholderImageView.alpha = 0
             self.didRevealResolvedImage = true
