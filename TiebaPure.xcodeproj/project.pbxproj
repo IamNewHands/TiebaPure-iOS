@@ -104,7 +104,6 @@
 		6FA2D3AF5E89699B2CE4B308 /* FollowedForumStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A7D6595D3A08623BD6998A /* FollowedForumStatusTests.swift */; };
 		7189EC19091324F1EF6886C5 /* OrderedCollectionPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC583D811BB2682A40FF679 /* OrderedCollectionPersistence.swift */; };
 		71CE2CA03E418210ED2CCF8B /* CapsuleLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */; };
-		B2C3D4E5F60718293A4B5C6D /* GlassSegmentedPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */; };
 		7364CD4DC533CA94A061941E /* CompatibleUIFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EEFF870AC95D5BA9A0AABD /* CompatibleUIFoundationTests.swift */; };
 		736CA9D7B75258F513F36463 /* TiebaPureTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25F6DDA828E44F9B5A0E5D9 /* TiebaPureTheme.swift */; };
 		76026EEB99DF530AF2195462 /* TiebaHotAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF031BCC6CB1F2182077E3E /* TiebaHotAPI.swift */; };
@@ -185,6 +184,7 @@
 		CF454E1295D97B7FE03A3DDA /* ContentMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA31C128D796A3D90D001643 /* ContentMappingTests.swift */; };
 		D0B17827BAA31E0CF4AD29ED /* AnonymousLiveSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBA0A4653556BD11ACA8C0A3 /* AnonymousLiveSmokeTests.swift */; };
 		D0EB13806B12EBFE42C8D71B /* RecentForum.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE02417BF13C2E0A1D7824E /* RecentForum.swift */; };
+		D28495CDB78835F8D6C5C963 /* GlassSegmentedPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B08A0834C976346048CB4CF1 /* GlassSegmentedPicker.swift */; };
 		D3B0D1E46535FF84CB41BAB7 /* SecurityRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594CFFAE35B27CDF27D9B903 /* SecurityRegressionTests.swift */; };
 		D3F2C72D1BAA5E6241C68B52 /* MetadataLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5F7218DA6FD8845675AE38 /* MetadataLine.swift */; };
 		D4E99B8D333718179465BF3E /* VideoPreviewTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF513D0BD122423A4CA7423D /* VideoPreviewTransition.swift */; };
@@ -419,7 +419,6 @@
 		944D4064677A9BAB7CD156BC /* ForumListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumListView.swift; sourceTree = "<group>"; };
 		946B2D7B6BCE7C2C716A3EB2 /* ThreadMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadMapper.swift; sourceTree = "<group>"; };
 		994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleLabel.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		99D55E6E9D9C9BE0630B5C89 /* InlineTextReuseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineTextReuseTests.swift; sourceTree = "<group>"; };
 		9CE43843ABF0E6FE36F6A7BD /* TiebaURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaURLTests.swift; sourceTree = "<group>"; };
 		9D3DFA01DD01FD4EA295E006 /* ForumHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumHubView.swift; sourceTree = "<group>"; };
@@ -437,6 +436,7 @@
 		AEC5695CD74141BB65787AB6 /* TiebaAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaAPIService.swift; sourceTree = "<group>"; };
 		AF02A66EF1B9089518F9ED99 /* ImageViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewer.swift; sourceTree = "<group>"; };
 		AFF65BFE5160CFC6F1F12CEF /* TiebaHTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaHTTPClient.swift; sourceTree = "<group>"; };
+		B08A0834C976346048CB4CF1 /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		B0B960AF4A983D18E1496538 /* SavedThreadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedThreadsView.swift; sourceTree = "<group>"; };
 		B0C64C8B87B07DA4103B1B7A /* TopicDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicDetailView.swift; sourceTree = "<group>"; };
 		B19C95736E6F6922D110E2A8 /* HotFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotFeed.swift; sourceTree = "<group>"; };
@@ -564,9 +564,9 @@
 			children = (
 				674313EBDA3BABF79049EF20 /* AvatarView.swift */,
 				994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */,
-				A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */,
 				06656E39A13E9DD402A3E9D7 /* CompatibleUnavailableView.swift */,
 				40014AEAB18EA73BA47B8C64 /* CompatibleValueChange.swift */,
+				B08A0834C976346048CB4CF1 /* GlassSegmentedPicker.swift */,
 				78FABF04E476AC1533EBDFA2 /* InteractiveNavigationPop.swift */,
 				9DC309A0384A60EB41BF7B46 /* LegacyScrollTelemetry.swift */,
 				277C554E042BEC92DDCC065C /* MediaGridView.swift */,
@@ -1208,7 +1208,6 @@
 				088782C68D3B3B22A6BF8320 /* BrowsingHistory.swift in Sources */,
 				D9175F6F62D428CC171F73D7 /* BrowsingHistoryView.swift in Sources */,
 				71CE2CA03E418210ED2CCF8B /* CapsuleLabel.swift in Sources */,
-				B2C3D4E5F60718293A4B5C6D /* GlassSegmentedPicker.swift in Sources */,
 				5FE25FDC40B4F42C42A3787C /* CommonRequest.pb.swift in Sources */,
 				7CEA7F2EE7BE862C3706356A /* CompatibleUnavailableView.swift in Sources */,
 				45FA5C71106C0E325C3D4798 /* CompatibleValueChange.swift in Sources */,
@@ -1240,6 +1239,7 @@
 				1B38ECEBD8AB77434B402F8A /* ForumThreadsRequestKey.swift in Sources */,
 				8CF348082F0201BCE9ED6E27 /* ForumThreadsView.swift in Sources */,
 				0E9AD304E9D62F985EBE1408 /* FrsPage_FrsPage.pb.swift in Sources */,
+				D28495CDB78835F8D6C5C963 /* GlassSegmentedPicker.swift in Sources */,
 				437B6FDDA2747BECF4DB14FD /* HomeView.swift in Sources */,
 				1A9A76A8D207ED2F5571F1EF /* HotFeed.swift in Sources */,
 				DBBBFF168ACE83D13C1F6054 /* HotThreadList_HotThreadList.pb.swift in Sources */,
