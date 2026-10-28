@@ -26,6 +26,19 @@ final class InlineTextReuseTests: XCTestCase {
         )
     }
 
+    /// `InlineContentTextViewPool.recycle` hops to the main queue before it
+    /// pools anything, so a test has to let that hop run before it can observe
+    /// the pool. Sleeping a fixed 20–50 ms is only a guess at how fast the main
+    /// queue drains and fails whenever CI is busy; a sentinel block enqueued
+    /// after the recycle call is ordered behind it and resumes as soon as the
+    /// queue reaches it.
+    @MainActor
+    private func drainMainQueue() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
     @MainActor
     func testHeightMeasuredOnceIsReusedByAnotherView() {
         let text = paragraph("回到这一行时不应该重新排版的合成回复内容。")
@@ -146,8 +159,8 @@ final class InlineTextReuseTests: XCTestCase {
         view.selectedRange = NSRange(location: 1, length: 3)
 
         InlineContentTextViewPool.recycle(view)
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        await drainMainQueue()
+
         XCTAssertEqual(InlineContentTextViewPool.pooledViewCount, 1)
 
         let reused = InlineContentTextViewPool.dequeue()
@@ -176,8 +189,7 @@ final class InlineTextReuseTests: XCTestCase {
         container.addSubview(view)
 
         InlineContentTextViewPool.recycle(view)
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        await drainMainQueue()
 
         XCTAssertEqual(
             InlineContentTextViewPool.pooledViewCount,
@@ -191,8 +203,7 @@ final class InlineTextReuseTests: XCTestCase {
         for _ in 0..<(InlineContentTextViewPool.capacity + 4) {
             InlineContentTextViewPool.recycle(InlineContentTextView())
         }
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        await drainMainQueue()
 
         XCTAssertEqual(
             InlineContentTextViewPool.pooledViewCount,
