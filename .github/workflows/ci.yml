@@ -6,6 +6,14 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      lanes:
+        description: 'all = every lane; compile-and-release = only the compile gate and the IPA job (for when macOS runner capacity is scarce)'
+        type: choice
+        options:
+          - all
+          - compile-and-release
+        default: all
 
 permissions:
   contents: write
@@ -66,6 +74,7 @@ jobs:
   # not recompiled from scratch on every run.
   unit-tests:
     name: Unit tests + iOS 16 linkage
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.lanes == 'all' }}
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -138,6 +147,7 @@ jobs:
 
   ui-tests-iphone:
     name: UI smoke tests (iPhone)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.lanes == 'all' }}
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -184,6 +194,7 @@ jobs:
 
   ui-tests-ipad:
     name: UI smoke test (iPad)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.lanes == 'all' }}
     runs-on: macos-26
     timeout-minutes: 30
     steps:
