@@ -441,7 +441,7 @@ final class TiebaPureUITests: XCTestCase {
         XCTAssertTrue(replyRow.waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["这是回复我的第一条合成消息，内容完全离线生成。"].exists)
 
-        let atSegment = app.segmentedControls.buttons["@我的"]
+        let atSegment = app.descendants(matching: .any)["messages-kind-picker"].buttons["@我的"]
         XCTAssertTrue(atSegment.waitForExistence(timeout: 5))
         XCTAssertTrue(waitForHittable(atSegment, expected: true, timeout: 5))
         atSegment.tap()
@@ -463,7 +463,7 @@ final class TiebaPureUITests: XCTestCase {
         let messagesEntry = app.buttons["me-messages-entry"]
         XCTAssertTrue(messagesEntry.waitForExistence(timeout: 8))
         messagesEntry.tap()
-        let atSegment = app.segmentedControls.buttons["@我的"]
+        let atSegment = app.descendants(matching: .any)["messages-kind-picker"].buttons["@我的"]
         XCTAssertTrue(atSegment.waitForExistence(timeout: 8))
         atSegment.tap()
 
@@ -2545,7 +2545,7 @@ final class TiebaPureUITests: XCTestCase {
         favoritesEntry.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["thread-favorite-row-1001"].waitForExistence(timeout: 8))
-        let filter = app.segmentedControls["thread-favorites-progress-filter"]
+        let filter = app.descendants(matching: .any)["thread-favorites-progress-filter"]
         XCTAssertTrue(filter.waitForExistence(timeout: 5))
         filter.buttons["无进度"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["thread-favorite-row-1002"].waitForExistence(timeout: 5))
@@ -2598,7 +2598,7 @@ final class TiebaPureUITests: XCTestCase {
         searchField.typeText("\n")
 
         XCTAssertTrue(app.navigationBars["搜索"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.segmentedControls.buttons["全部"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["search-result-controls"].buttons["全部"].waitForExistence(timeout: 10))
         let firstResult = threadRows(in: app).firstMatch
         XCTAssertTrue(firstResult.waitForExistence(timeout: 10))
         app.descendants(matching: .any).matching(identifier: "thread-open-area").firstMatch.tap()
@@ -4784,12 +4784,11 @@ final class TiebaPureUITests: XCTestCase {
         searchField.typeText("\n")
         XCTAssertTrue(threadRows(in: app).firstMatch.waitForExistence(timeout: 8))
         let searchScroll = app.scrollViews["search-results-scroll-view"]
-        let searchSegmentedControl = app.segmentedControls.firstMatch
-        let allFilter = app.segmentedControls.buttons["全部"]
         let searchControlBar = app.descendants(matching: .any)["search-result-controls"]
+        let allFilter = searchControlBar.buttons["全部"]
         let searchSortButton = app.buttons["排序：最新"]
         XCTAssertTrue(searchScroll.waitForExistence(timeout: 5))
-        XCTAssertTrue(searchSegmentedControl.waitForExistence(timeout: 5))
+        XCTAssertTrue(searchControlBar.buttons["主题"].waitForExistence(timeout: 5))
         XCTAssertTrue(allFilter.waitForExistence(timeout: 5))
         XCTAssertTrue(searchControlBar.waitForExistence(timeout: 5))
         XCTAssertTrue(searchSortButton.waitForExistence(timeout: 5))
@@ -4797,7 +4796,7 @@ final class TiebaPureUITests: XCTestCase {
         XCTAssertEqual(searchControlBar.frame.height, 40, accuracy: 1)
         XCTAssertEqual(allFilter.frame.midY, searchControlBar.frame.midY, accuracy: 1)
         XCTAssertEqual(searchSortButton.frame.midY, searchControlBar.frame.midY, accuracy: 1)
-        XCTAssertLessThan(searchSegmentedControl.frame.midX, searchControlBar.frame.midX)
+        XCTAssertLessThan(allFilter.frame.midX, searchControlBar.frame.midX)
         XCTAssertGreaterThan(searchSortButton.frame.midX, searchControlBar.frame.midX)
         let fixedSearchFieldY = searchField.frame.minY
         attachScreenshot(named: "issue43-search-compact")
@@ -5107,12 +5106,12 @@ final class TiebaPureUITests: XCTestCase {
         searchField.typeText("\n")
         XCTAssertTrue(threadRows(in: app).firstMatch.waitForExistence(timeout: 8))
 
-        let topicFilter = app.segmentedControls.buttons["主题"]
+        let topicFilter = app.descendants(matching: .any)["search-result-controls"].buttons["主题"]
         XCTAssertTrue(waitForHittable(topicFilter, expected: true, timeout: 5))
         topicFilter.tap()
         XCTAssertTrue(app.staticTexts["没有结果"].waitForExistence(timeout: 8))
 
-        let allFilter = app.segmentedControls.buttons["全部"]
+        let allFilter = app.descendants(matching: .any)["search-result-controls"].buttons["全部"]
         XCTAssertTrue(allFilter.exists)
         XCTAssertTrue(waitForHittable(allFilter, expected: true, timeout: 5))
         allFilter.tap()

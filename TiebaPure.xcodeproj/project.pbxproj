@@ -104,6 +104,7 @@
 		6FA2D3AF5E89699B2CE4B308 /* FollowedForumStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A7D6595D3A08623BD6998A /* FollowedForumStatusTests.swift */; };
 		7189EC19091324F1EF6886C5 /* OrderedCollectionPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC583D811BB2682A40FF679 /* OrderedCollectionPersistence.swift */; };
 		71CE2CA03E418210ED2CCF8B /* CapsuleLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */; };
+		B2C3D4E5F60718293A4B5C6D /* GlassSegmentedPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */; };
 		7364CD4DC533CA94A061941E /* CompatibleUIFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EEFF870AC95D5BA9A0AABD /* CompatibleUIFoundationTests.swift */; };
 		736CA9D7B75258F513F36463 /* TiebaPureTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25F6DDA828E44F9B5A0E5D9 /* TiebaPureTheme.swift */; };
 		76026EEB99DF530AF2195462 /* TiebaHotAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF031BCC6CB1F2182077E3E /* TiebaHotAPI.swift */; };
@@ -418,6 +419,7 @@
 		944D4064677A9BAB7CD156BC /* ForumListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumListView.swift; sourceTree = "<group>"; };
 		946B2D7B6BCE7C2C716A3EB2 /* ThreadMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadMapper.swift; sourceTree = "<group>"; };
 		994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleLabel.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		99D55E6E9D9C9BE0630B5C89 /* InlineTextReuseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineTextReuseTests.swift; sourceTree = "<group>"; };
 		9CE43843ABF0E6FE36F6A7BD /* TiebaURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiebaURLTests.swift; sourceTree = "<group>"; };
 		9D3DFA01DD01FD4EA295E006 /* ForumHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumHubView.swift; sourceTree = "<group>"; };
@@ -562,6 +564,7 @@
 			children = (
 				674313EBDA3BABF79049EF20 /* AvatarView.swift */,
 				994E9D3128F82A0683DA39E0 /* CapsuleLabel.swift */,
+				A1B2C3D4E5F60718293A4B5C /* GlassSegmentedPicker.swift */,
 				06656E39A13E9DD402A3E9D7 /* CompatibleUnavailableView.swift */,
 				40014AEAB18EA73BA47B8C64 /* CompatibleValueChange.swift */,
 				78FABF04E476AC1533EBDFA2 /* InteractiveNavigationPop.swift */,
@@ -1205,6 +1208,7 @@
 				088782C68D3B3B22A6BF8320 /* BrowsingHistory.swift in Sources */,
 				D9175F6F62D428CC171F73D7 /* BrowsingHistoryView.swift in Sources */,
 				71CE2CA03E418210ED2CCF8B /* CapsuleLabel.swift in Sources */,
+				B2C3D4E5F60718293A4B5C6D /* GlassSegmentedPicker.swift in Sources */,
 				5FE25FDC40B4F42C42A3787C /* CommonRequest.pb.swift in Sources */,
 				7CEA7F2EE7BE862C3706356A /* CompatibleUnavailableView.swift in Sources */,
 				45FA5C71106C0E325C3D4798 /* CompatibleValueChange.swift in Sources */,
@@ -1505,7 +1509,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				INFOPLIST_FILE = TiebaPure/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1522,7 +1526,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				INFOPLIST_FILE = TiebaPureOpenIn/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1575,7 +1579,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				INFOPLIST_FILE = TiebaPureOpenIn/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1595,7 +1599,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				INFOPLIST_FILE = TiebaPure/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -83,16 +83,19 @@ struct MessagesView: View {
     }
 
     private var kindPicker: some View {
-        Picker("消息类型", selection: $kind) {
-            Text("回复我的").tag(MessageKind.reply)
-            Text("@我的").tag(MessageKind.at)
-        }
-        .pickerStyle(.segmented)
+        GlassSegmentedPicker(
+            "消息类型",
+            options: [
+                GlassPickerOption(value: MessageKind.reply, label: "回复我的"),
+                GlassPickerOption(value: MessageKind.at, label: "@我的")
+            ],
+            selection: $kind,
+            identifier: "messages-kind-picker"
+        )
         .frame(maxWidth: 320)
         .frame(minHeight: 44)
         .padding(.horizontal, TiebaPureTheme.Spacing.md)
         .padding(.vertical, TiebaPureTheme.Spacing.xs)
-        .accessibilityIdentifier("messages-kind-picker")
     }
 
     @ViewBuilder

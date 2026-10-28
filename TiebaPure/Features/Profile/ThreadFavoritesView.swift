@@ -320,17 +320,18 @@ struct ThreadFavoritesView: View {
     }
 
     private var progressFilterPicker: some View {
-        Picker("阅读进度", selection: $progressFilter) {
-            ForEach(ThreadFavoritesProgressFilter.allCases) { filter in
-                Text(filter.title).tag(filter)
-            }
-        }
-        .pickerStyle(.segmented)
+        GlassSegmentedPicker(
+            "阅读进度",
+            options: ThreadFavoritesProgressFilter.allCases.map {
+                GlassPickerOption(value: $0, label: $0.title)
+            },
+            selection: $progressFilter,
+            identifier: "thread-favorites-progress-filter"
+        )
         .frame(maxWidth: 360)
         .frame(minHeight: 44)
         .padding(.horizontal, TiebaPureTheme.Spacing.md)
         .padding(.vertical, TiebaPureTheme.Spacing.xs)
-        .accessibilityIdentifier("thread-favorites-progress-filter")
     }
 
     @ViewBuilder

@@ -235,17 +235,17 @@ struct HomeView: View {
     }
 
     private var feedSegmentPicker: some View {
-        Picker("首页分页", selection: $feedSegment) {
-            ForEach(HomeFeedSegment.allCases) { segment in
-                Text(segment.title)
-                    .tag(segment)
-            }
-        }
-        .pickerStyle(.segmented)
+        GlassSegmentedPicker(
+            "首页分页",
+            options: HomeFeedSegment.allCases.map {
+                GlassPickerOption(value: $0, label: $0.title)
+            },
+            selection: $feedSegment,
+            identifier: "home-feed-segment-picker"
+        )
         .padding(.horizontal, TiebaPureTheme.Spacing.md)
         .padding(.vertical, TiebaPureTheme.Spacing.xs)
         .background(TiebaPureTheme.ColorToken.readerGroupedBackground)
-        .accessibilityIdentifier("home-feed-segment-picker")
     }
 
     /// Both segments stay in the hierarchy, so switching only changes which one

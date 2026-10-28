@@ -218,17 +218,18 @@ struct BrowsingHistoryView: View {
     }
 
     private var dateFilterPicker: some View {
-        Picker("时间范围", selection: $dateFilter) {
-            ForEach(BrowsingHistoryDateFilter.allCases) { filter in
-                Text(filter.title).tag(filter)
-            }
-        }
-        .pickerStyle(.segmented)
+        GlassSegmentedPicker(
+            "时间范围",
+            options: BrowsingHistoryDateFilter.allCases.map {
+                GlassPickerOption(value: $0, label: $0.title)
+            },
+            selection: $dateFilter,
+            identifier: "browsing-history-date-filter"
+        )
         .frame(maxWidth: 360)
         .frame(minHeight: 44)
         .padding(.horizontal, TiebaPureTheme.Spacing.md)
         .padding(.vertical, TiebaPureTheme.Spacing.xs)
-        .accessibilityIdentifier("browsing-history-date-filter")
     }
 
     @ViewBuilder

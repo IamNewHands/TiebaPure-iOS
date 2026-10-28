@@ -517,11 +517,15 @@ struct SearchResultsView: View {
     }
 
     private var filterPicker: some View {
-            Picker("范围", selection: $filterType) {
-                Text("全部").tag(2)
-                Text("主题").tag(1)
-            }
-            .pickerStyle(.segmented)
+            GlassSegmentedPicker(
+                "范围",
+                options: [
+                    GlassPickerOption(value: 2, label: "全部"),
+                    GlassPickerOption(value: 1, label: "主题")
+                ],
+                selection: $filterType,
+                identifier: "search-result-filter-picker"
+            )
             .frame(maxWidth: 220)
             .frame(height: SearchResultsControlsLayout.controlHeight, alignment: .center)
             .contentShape(Rectangle())
