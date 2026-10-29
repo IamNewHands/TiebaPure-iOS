@@ -311,6 +311,13 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES"
+            # A re-uploaded asset keeps the release object's original published_at,
+            # so the page still shows the day the tag was first published. Un-drafting
+            # stamps published_at with the current time; the release is briefly
+            # unpublished between the two calls.
+            RELEASE_ID="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=true >/dev/null
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false >/dev/null
           else
             gh release create "$RELEASE_TAG" "$IPA" --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" --notes "$NOTES"
